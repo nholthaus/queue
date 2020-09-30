@@ -1106,7 +1106,7 @@ namespace
 			                           }
 			                           return std::this_thread::get_id();
 		                           });
-		auto consumer = std::async(std::launch::async, [&queue, &numbers_out]
+		auto consumer = std::async(std::launch::async, [&queue, &numbers_out, test_size]
 		                           {
 			                           int val;
 			                           while (numbers_out.size() < test_size)
@@ -1200,7 +1200,7 @@ namespace
 			                            return std::this_thread::get_id();
 		                            });
 
-		std::this_thread::sleep_for(1s);
+		std::this_thread::sleep_for(3s);
 		done.store(true);
 
 		auto producer1_id = producer1.get();

@@ -52,5 +52,6 @@ set_target_properties(${PROJECT_NAME} PROPERTIES INTERFACE_INCLUDE_DIRECTORIES $
 #-------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
+    enable_testing(true)
     add_subdirectory(test)
 endif()
