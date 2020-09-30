@@ -15,6 +15,9 @@ addons:
 before_install:
   - pip install --user cpp-coveralls
 
+install:
+  - if [ "$CXX" = "g++" ]; then export CXX="g++-9" CC="gcc-9"; fi
+
 script:
   - mkdir build
   - cd build
