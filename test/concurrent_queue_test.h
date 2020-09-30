@@ -1144,6 +1144,7 @@ namespace
 		std::deque<int> out1;
 		std::deque<int> out2;
 
+		std::atomic_bool finished_writting = false;
 		std::atomic_bool done = false;
 
 		std::generate_n(odds.begin(), odds.size(), generate_odd_numbers{});
@@ -1169,7 +1170,7 @@ namespace
 			                            }
 			                            return std::this_thread::get_id();
 		                            });
-		auto producer2 = std::async(std::launch::async, [&queue, &evens]
+		auto producer2 = std::async(std::launch::async, [&queue, &evens, &finished_writting]
 		                            {
 			                            while (!evens.empty())
 			                            {
@@ -1177,6 +1178,7 @@ namespace
 				                            evens.pop_front();
 				                            std::this_thread::sleep_for(5ms);
 			                            }
+										finished_writting = true;
 			                            return std::this_thread::get_id();
 		                            });
 		auto consumer1 = std::async(std::launch::async, [&queue, &out1, &done]
@@ -1200,7 +1202,10 @@ namespace
 			                            return std::this_thread::get_id();
 		                            });
 
-		std::this_thread::sleep_for(3s);
+		while(!finished_writting)
+		{
+			std::this_thread::sleep_for(1s);
+		}
 		done.store(true);
 
 		auto producer1_id = producer1.get();
