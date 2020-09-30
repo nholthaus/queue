@@ -1,0 +1,29 @@
+sudo: false
+
+language:
+  - cpp
+compiler:
+  - g++-9
+
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+    packages:
+      - g++-9
+
+before_install:
+  - pip install --user cpp-coveralls
+
+script:
+  - mkdir build
+  - cd build
+  - cmake -DBUILD_TESTS=ON ..
+  - cmake --build . -- -j
+  - ctest
+
+after_success:
+  - coveralls --root .. -E ".*external.*" -E ".*CMakeFiles.*" -E ".*test/.*.cpp.*"
+
+notifications:
+  email: false
