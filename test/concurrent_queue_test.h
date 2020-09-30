@@ -1221,8 +1221,11 @@ namespace
 		EXPECT_EQ(out1.size() + out2.size(), 200);
 
 		std::deque<int> full_output;
+
+		// merge needs sorted input, produces sorted output
+		std::sort(out1.begin(), out1.end());
+		std::sort(out2.begin(), out2.end());
 		std::merge(out1.cbegin(), out1.cend(), out2.cbegin(), out2.cend(), std::back_inserter(full_output));
-		std::sort(full_output.begin(), full_output.end());
 
 		EXPECT_EQ(full_output.size(), 200);
 
