@@ -1,6 +1,7 @@
 # Build Directories
 *[Bb]uild*
 out
+doc
 .vs
 
 # CLion

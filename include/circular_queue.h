@@ -32,8 +32,8 @@
 //
 //--------------------------------------------------------------------------------------------------
 //
-/// @file	Templated STL-style circular queue
-/// @brief
+/// @file   circular_queue.h
+/// @brief  An STL-style fixed-size circular queue
 //
 //--------------------------------------------------------------------------------------------------
 
@@ -89,9 +89,6 @@
 ///				have less consistent iterators and references than lists and forward lists.\n\n
 ///
 ///				This class can be moved very quickly (constant time). It may be slow to copy.\n
-///
-///				This class supports CUDA unified memory access for use with thrust when compiled with
-///				NVCC.
 ///
 ///				<b>Container properties</b>\n
 ///				<i>Sequence</i>\n
@@ -1062,9 +1059,9 @@ public:
 	//////////////////////////////////////////////////////////////////////////
 
 	/**
-    * @defgroup		constructors Constructors
-    * @brief		Methods to construct, destruct, and assign the container.
-    * @{
+	* @{
+    * @name     Constructors
+    * @brief    Methods to construct, destruct, and assign the container.
     */
 
 	/**
@@ -1348,9 +1345,8 @@ public:
 	//////////////////////////////////////////////////////////////////////////
 
 	/**
-     * @defgroup	destructors Destructors
-     * @brief
      * @{
+     * @name    Destructor
      */
 
 	/**
@@ -1372,9 +1368,8 @@ public:
 	//////////////////////////////////////////////////////////////////////////
 
 	/**
-     * @defgroup	operators Operators
-     * @brief
      * @{
+     * @name	Operators
      */
 
 	/**
@@ -1514,7 +1509,6 @@ public:
      * @param[in]	n Position of an element in the container. Notice that the first element has a
      *				position of 0 (not 1). Member type size_type is an unsigned integral type.
      * @returns		The element at the specified position in the circular_queue.
-     * @{
      */
 	reference operator[](size_type n)
 	{
@@ -1522,12 +1516,12 @@ public:
 		return *(m_data + ((m_head.ptr - m_data + n) % m_capacity));
 	}
 
+	/// @overload
 	const_reference operator[](size_type n) const
 	{
 		assert(n < m_capacity);
 		return *(m_data + ((m_head.ptr - m_data + n) % m_capacity));
 	}
-	/** @} */    // end of operator[]
 
 	/** @} */    // end of operators
 
@@ -1536,9 +1530,9 @@ public:
 	//////////////////////////////////////////////////////////////////////////
 
 	/**
-    * @defgroup		iterators Iterators
-    * @brief		Methods to construct iterators to the container.
     * @{
+    * @name		Iterators
+    * @brief	Methods to construct iterators to the container.
     */
 
 	/**
@@ -1554,18 +1548,17 @@ public:
      *					exceptions. The copy construction or assignment of the returned iterator is also
      *					guaranteed to never throw.\n
      * @returns		An iterator to the beginning of the sequence container.
-     * @{
      */
 	iterator begin() noexcept
 	{
 		return iterator(this, m_head);
 	}
 
+	/// @overload
 	const_iterator begin() const noexcept
 	{
 		return const_iterator(this, m_head);
 	}
-	/** @} */    // end of begin
 
 	/**
      * @brief		Returns iterator to end
@@ -1580,20 +1573,20 @@ public:
      *					exceptions. The copy construction or assignment of the returned iterator is also
      *					guaranteed to never throw.\n
      * @returns		An iterator to the end of the sequence container.
-     * @{
      */
 	iterator end() noexcept
 	{
 		return iterator(this, m_tail);
 	}
 
+	/// @overload
 	const_iterator end() const noexcept
 	{
 		return const_iterator(this, m_tail);
 	}
-	/** @} */    // end of end
 
 	/**
+	 * @function    rbegin
     * @brief		Returns reverse iterator to beginning
     * @details		Returns a reverse iterator to the reverse beginning (last element) in the
     *				container. rbegin points to the element right before the one that would be
@@ -1608,18 +1601,17 @@ public:
     *					exceptions. The copy construction or assignment of the returned iterator is also
     *					guaranteed to never throw.\n
     * @returns		A reverse iterator to the beginning of the sequence container.
-    * @{
     */
 	reverse_iterator rbegin() noexcept
 	{
 		return reverse_iterator(end());
 	}
 
+	/// @overload
 	const_reverse_iterator rbegin() const noexcept
 	{
 		return const_reverse_iterator(end());
 	}
-	/** @} */    // end of rbegin
 
 	/**
     * @brief		Returns reverse iterator to end
@@ -1635,18 +1627,17 @@ public:
     *					exceptions. The copy construction or assignment of the returned iterator is also
     *					guaranteed to never throw.\n
     * @returns		A reverse iterator to the end of the sequence container.
-    * @{
     */
 	reverse_iterator rend() noexcept
 	{
 		return reverse_iterator(begin());
 	}
 
+	/// @overload
 	const_reverse_iterator rend() const noexcept
 	{
 		return const_reverse_iterator(begin());
 	}
-	/** @} */    // end of rend
 
 	/**
      * @brief		Returns constant iterator to beginning
@@ -1749,9 +1740,9 @@ public:
 	//////////////////////////////////////////////////////////////////////////
 
 	/**
-    * @defgroup		capacity Capacity
-    * @brief		Methods to determine the capacity of the container
     * @{
+    * @name		Capacity
+    * @brief	Methods to determine the capacity of the container
     */
 
 	/**
@@ -1971,9 +1962,9 @@ public:
 	//////////////////////////////////////////////////////////////////////////
 
 	/**
-     * @defgroup	element_access Element Access
-     * @brief		Members that provide access to individual elements contained withing the circular_queue
      * @{
+     * @name	Element Access
+     * @brief	Members that provide access to individual elements contained withing the circular_queue
      */
 
 	/**
@@ -1993,7 +1984,6 @@ public:
      * @returns		The element at the specified position in the container. If the circular_queue
      *				object is const-qualified, the function returns a const_reference. Otherwise,
      *				it returns a reference.
-     * @{
      */
 	reference at(size_type n)
 	{
@@ -2005,6 +1995,7 @@ public:
 		return *(m_data + ((m_head.ptr - m_data + n) % m_capacity));
 	}
 
+	/// @overload
 	const_reference at(size_type n) const
 	{
 		if (n >= size())
@@ -2014,7 +2005,6 @@ public:
 
 		return *(m_data + ((m_head.ptr - m_data + n) % m_capacity));
 	}
-	/** @} */    // end of at()
 
 	/**
      * @brief		Access first element
@@ -2032,18 +2022,17 @@ public:
      *					throws exceptions (no-throw guarantee). Otherwise, it causes undefined
      *					behavior.\n
      * @returns		A reference to the first element in the circular_queue.
-     * @{
      */
 	reference front() noexcept
 	{
 		return *m_head.ptr;
 	}
 
+	/// @overload
 	const_reference front() const noexcept
 	{
 		return *m_head.ptr;
 	}
-	/** @} */    // end of front()
 
 	/**
      * @brief		Access last element
@@ -2068,12 +2057,12 @@ public:
 		return *p.ptr;
 	}
 
+	/// @overload
 	const_reference back() const
 	{
 		queue_pointer p = decrement(m_tail, 1);
 		return *p.ptr;
 	}
-	/** @} */    // end of back()
 
 	/** @} */    // end of element_access
 
@@ -2082,9 +2071,9 @@ public:
 	//////////////////////////////////////////////////////////////////////////
 
 	/**
-     * @defgroup	modifiers Modifiers
-     * @brief		Member functions that modify the container.
      * @{
+     * @name	Modifiers
+     * @brief	Member functions that modify the container.
      */
 
 	/**
@@ -2343,7 +2332,6 @@ public:
      * @param[in]	val value to copy/move into the end of the container. Member type value_type is
      *					the type of the elements in the container, defined in vector as an alias of
      *					its first template parameter (T).
-     * @{
      */
 	void push_back(const value_type& val)
 	{
@@ -2374,6 +2362,7 @@ public:
 		m_tail = increment(m_tail, 1);
 	}
 
+	/// @overload
 	void push_back(value_type&& val)
 	{
 		// make sure if the push fails the queue is in a valid state
@@ -2402,7 +2391,6 @@ public:
 		// it allocated OK, update state
 		m_tail = increment(m_tail, 1);
 	}
-	/** @} */    // end of push_back()
 
 	/**
      * @brief		Add element at beginning
@@ -2423,7 +2411,6 @@ public:
      * @param[in]	val value to copy/move into the end of the container. Member type value_type is
      *					the type of the elements in the container, defined in vector as an alias of
      *					its first template parameter (T).
-     * @{
      */
 	void push_front(const value_type& val)
 	{
@@ -2455,6 +2442,7 @@ public:
 		}
 	}
 
+	/// @overload
 	void push_front(value_type&& val)
 	{
 		// make sure if the push fails the queue is in a valid state
@@ -2484,7 +2472,6 @@ public:
 			throw std::bad_alloc();
 		}
 	}
-	/** @} */    // end of push_front()
 
 	/**
      * @brief		Delete last element
@@ -3013,9 +3000,9 @@ public:
 	//////////////////////////////////////////////////////////////////////////
 
 	/**
-     * @defgroup	accessors Accessors
-     * @brief		Access member objects of the container
      * @{
+     * @name	Accessors
+     * @brief	Access member objects of the container
      */
 
 	/**
@@ -3085,7 +3072,6 @@ protected:
      * @param[in]	n number of elements to increment the pointer
      * @param[in]	parity parity bit associated with the pointer. This function modifies the value
      *				of parity.
-     * @{
      */
 	inline queue_pointer increment(queue_pointer p, difference_type n) const noexcept
 	{
@@ -3111,6 +3097,7 @@ protected:
 		return p;
 	}
 
+	/// @overload
 	inline const_queue_pointer increment(const_queue_pointer p, difference_type n) const noexcept
 	{
 		p.ptr += n;
@@ -3134,7 +3121,6 @@ protected:
 
 		return p;
 	}
-	/** @} */    // end of increment
 
 	/**
     * @brief		decrements a pointer
@@ -3143,7 +3129,6 @@ protected:
     * @param[in]	n number of elements to increment the pointer
     * @param[in]	parity parity bit associated with the pointer. This function modifies the value
     *				of parity.
-    * @{
     */
 	inline queue_pointer decrement(queue_pointer p, difference_type n) const noexcept
 	{
@@ -3169,6 +3154,7 @@ protected:
 		return p;
 	}
 
+	/// @overload
 	inline const_queue_pointer decrement(const_queue_pointer p, difference_type n, bool& parity) const noexcept
 	{
 		p.ptr -= n;
@@ -3192,7 +3178,6 @@ protected:
 
 		return p;
 	}
-	/** @} */    // end of decrement
 
 	/**
      * @brief		moves the currently contained data to a new area with size n.

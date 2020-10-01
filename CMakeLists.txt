@@ -3,7 +3,9 @@
 #-------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.7)
+LIST(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 option(BUILD_TESTS "Build the unit tests" OFF)
+option(BUILD_DOCUMENTATION "Build the documentation" OFF)
 
 #-------------------------------------------------------------------------------
 #	PROJECT SETTINGS
@@ -54,4 +56,23 @@ set_target_properties(${PROJECT_NAME} PROPERTIES INTERFACE_INCLUDE_DIRECTORIES $
 if(BUILD_TESTS)
     enable_testing(true)
     add_subdirectory(test)
+endif()
+
+#-------------------------------------------------------------------------------
+#	DOXYGEN
+#-------------------------------------------------------------------------------
+
+if(BUILD_DOCUMENTATION)
+    find_package(Doxygen)
+    if(NOT DOXYGEN_FOUND)
+        message(WARNING "Doxygen not found, unable to generate documentation")
+    else()
+        find_package(Git)
+        include(gitInfo)
+        configure_file(Doxyfile.in ${CMAKE_BINARY_DIR}/Doxyfile @ONLY)
+        add_custom_target(documentation COMMAND ${DOXYGEN_EXECUTABLE} "${CMAKE_BINARY_DIR}/Doxyfile"
+            WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY}
+            COMMENT "Building the documentation..."
+        )
+    endif()
 endif()

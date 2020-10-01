@@ -104,6 +104,9 @@ public:
 	//  CONSTRUCTORS
 	//----------------------------
 
+	/// @{
+	/// @name Constructors
+
 	/// @brief Default Constructor.
 	/// @details Constructs an empty container, with no elements.
 	/// @param[in] alloc optional memory allocator.
@@ -191,14 +194,27 @@ public:
 	{
 	}
 
+	/// @}
+
+	//----------------------------
+	//  DESTRUCTOR
+	//----------------------------
+
+	/// @{
+	/// @name Destructor
+	
 	/// @brief Destructor
 	/// @details Destructs the concurrent queue. The destructors of the elements are called and the used storage is deallocated.
 	///          Note, that if the elements are pointers, the pointed-to objects are not destroyed.
 	inline ~concurrent_queue() = default;
 
+	/// @}
+
 	//----------------------------
 	//  ASSIGNMENT OPERATORS
 	//----------------------------
+	/// @{
+	/// @name Assignment Operators
 
 	/// @brief Copy Assignment Operator
 	/// @param[in] other concurrent queue whose elements are to be copied.
@@ -230,10 +246,17 @@ public:
 		return *this;
 	}
 
+	/// @}
+
 	//----------------------------
 	//  THREAD-SAFE PUBLIC METHODS
 	//----------------------------
 
+	/// @{
+	/// @name Thread-safe Public Members
+	/// @details These methods are safe for use in situations where the queue will be concurrently accessed by 
+	///          multiple threads.
+	
 	/// @brief Clears the concurrent queue, destroying any currently enqueued elements.
 	/// @details This method is not concurrency-safe, and invalidates all iterators.
 	inline void clear() noexcept
@@ -372,33 +395,15 @@ public:
 		return true;
 	}
 
-	//----------------------------
-	//  EQUALITY OPERATORS
-	//----------------------------
-
-	/// @brief Equality Operator
-	/// @param rhs Right-hand side of the comparison
-	/// @return true if the contents of the queues are equivalent, false otherwise.
-	template<class Ty, template<class, class> class Q, class A>
-	friend bool operator==(const concurrent_queue<Ty, Q, A>& lhs, const concurrent_queue<Ty, Q, A>& rhs);
-
-	/// @brief Inequality Operator
-	/// @param rhs Right-hand side of the comparison
-	/// @return false if the contents of the queues are equivalent, true otherwise.
-	template<class Ty, template<class, class> class Q, class A>
-	friend bool operator!=(const concurrent_queue<Ty, Q, A>& lhs, const concurrent_queue<Ty, Q, A>& rhs);
-
-	/// @brief Swap Operator
-	/// @param lhs container to swap with rhs
-	/// @param rhs container to swap with lhs
-	template<class Ty, template<class, class> class Q, class A>
-	friend void std::swap(concurrent_queue<Ty, Q, A>& lhs, concurrent_queue<Ty, Q, A>& rhs);
+	/// @}
 
 	//----------------------------
 	//  THREAD-UNSAFE ACCESSORS
 	//----------------------------
-	// These are not recommended for use in production code and will generate warnings when used. That said, they're
-	// helpful for testing and debug, which is why they are included.
+	/// @{
+	/// @name Thread-unsafe Public Members
+	/// @details These methods are not recommended for use in production code and will generate warnings when used. That said, they're
+	///			 helpful for testing and debug, which is why they are included.
 
 	/// @brief Returns an iterator of type iterator to the beginning of the concurrent queue.
 	/// @details This method is not concurrency-safe. The iterators for the concurrent_queue class are
@@ -484,12 +489,20 @@ public:
 		return queue.cend();
 	}
 
+	/// @}
+
 	//----------------------------
 	//  [TEST USE] ACCESS CONTROL
 	//----------------------------
 	// These functions are primarily intended for testing/debugging, and are NOT the recommended interface for using
 	// the concurrent queue (prefer `push` and `try_pop`). However, they may have some limited utility when iteration
 	// is absolutely required.
+
+	/// @{
+	/// @name Access Control
+	/// @details These methods provide the ability to lock the concurrent_queue for thread-safe iteration. They are 
+	///          primarily intended for test and debug use, and care must be taken when explicitely locking the queue to 
+	///			 avoid deadlock. These methods are NOT recommended for production code, and will produce warnings when used.
 
 	/// @brief  Lock the queue in a manner in which it is safe for multiple threads to read-iterate over it
 	/// @details Allows concurrency-safe iteration.
@@ -518,6 +531,44 @@ public:
 	{
 		return write_lock_type(this->mutex);
 	}
+
+	/// @}
+
+	//----------------------------
+	//  EQUALITY OPERATORS
+	//----------------------------
+
+	/// @{
+	/// @name Equality Operators
+
+	/// @brief Equality Operator
+	/// @param rhs Right-hand side of the comparison
+	/// @return true if the contents of the queues are equivalent, false otherwise.
+	template<class Ty, template<class, class> class Q, class A>
+	friend bool operator==(const concurrent_queue<Ty, Q, A>& lhs, const concurrent_queue<Ty, Q, A>& rhs);
+
+	/// @brief Inequality Operator
+	/// @param rhs Right-hand side of the comparison
+	/// @return false if the contents of the queues are equivalent, true otherwise.
+	template<class Ty, template<class, class> class Q, class A>
+	friend bool operator!=(const concurrent_queue<Ty, Q, A>& lhs, const concurrent_queue<Ty, Q, A>& rhs);
+
+	/// @}
+
+	//----------------------------
+	//  SWAP
+	//----------------------------
+
+	/// @{
+	/// @name Swap Operator
+
+	/// @brief Swap Operator
+	/// @param lhs container to swap with rhs
+	/// @param rhs container to swap with lhs
+	template<class Ty, template<class, class> class Q, class A>
+	friend void std::swap(concurrent_queue<Ty, Q, A>& lhs, concurrent_queue<Ty, Q, A>& rhs);
+
+	/// @}
 
 private:
 	//----------------------------
