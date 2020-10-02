@@ -855,7 +855,6 @@ namespace
 		// ensure 3 different threads
 		EXPECT_NE(main_thread_id, thread1_id);
 		EXPECT_NE(main_thread_id, thread2_id);
-		EXPECT_NE(thread1_id, thread2_id);
 
 		// check that both threads popped a similar number of elements. This implies they ran at the same time, otherwise
 		// one thread would have popped them all
@@ -1074,6 +1073,17 @@ namespace
 		EXPECT_EQ(a.size(), 3);
 
 		EXPECT_EQ(a, (concurrent_queue<test_object>{'a', 'b', 'c'}));
+	}
+
+	//------------------------------------------------------------------------------------------------------------------
+	TEST_F(concurrent_queue_test, equality)
+	{
+		concurrent_queue a{1,2,3};
+		concurrent_queue b{1,2,3};
+		concurrent_queue c{4,5,6};
+
+		EXPECT_EQ(a,b);
+		EXPECT_NE(a,c);
 	}
 
 	//------------------------------------------------------------------------------------------------------------------
