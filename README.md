@@ -1,26 +1,20 @@
-# Queue
-<a id="markdown-queue" name="queue"></a>
+![Queue](resources/queue_banner_transparent.png)
+
 [![Build Status](https://travis-ci.org/nholthaus/queue.svg?branch=main)](https://travis-ci.org/github/nholthaus/queue) [![Build status](https://ci.appveyor.com/api/projects/status/dfoks5b44qsgf7ka/branch/master?svg=true)](https://ci.appveyor.com/project/nholthaus/queue/branch/master) ![language](https://img.shields.io/badge/language-c++17-blue.svg) ![license](https://img.shields.io/badge/license-MIT-orange.svg) ![copyright](https://img.shields.io/badge/%C2%A9-Nic_Holthaus-orange.svg) ![msvc2019](https://img.shields.io/badge/MSVC-2019-ff69b4.svg) ![gcc-9.3.0](https://img.shields.io/badge/GCC-9.3.0-ff69b4.svg)
 
 A modern C++ header-only library of various types of queue
 
 # Table of Contents
-<a id="markdown-table-of-contents" name="table-of-contents"></a>
 <!-- TOC -->
 
-- [Queue](#queue)
-- [Table of Contents](#table-of-contents)
-- [Build Instructions](#build-instructions)
-- [Usage](#usage)
-	- [Concurrent Queue](#concurrent-queue)
-		- [Example](#example)
-	- [Circular Queue](#circular-queue)
-		- [Example](#example)
+- [Concurrent Queue](#concurrent-queue)
+    - [Example](#example)
+- [Circular Queue](#circular-queue)
+    - [Example](#example-1)
 
 <!-- /TOC -->
 
 # Build Instructions
-<a id="markdown-build-instructions" name="build-instructions"></a>
 
 Each class in the library itself is a single header only. You can use the included CMake in a subdirectory and add the interface library, or just copy the `*.h` files (and license) into your project.
 
@@ -41,15 +35,12 @@ cmake -DBUILD_TESTS=ON -DBUILD_DOCUMENTATION=ON ..
 ```
 
 # Usage
-<a id="markdown-usage" name="usage"></a>
 
 ## Concurrent Queue
-<a id="markdown-concurrent-queue" name="concurrent-queue"></a>
 
 The `concurrent_queue` class is a templated FIFO (first-in, first-out) queue that is suitable for concurrent use, including cases where there are multiple producers and multiple consumers reading and writing the queue simultaneously. It has an atomic `push`/`pop` interface for enqueueing and dequeueing elements.
 
 ### Example
-<a id="markdown-example" name="example"></a>
 
 Run it live on [Compiler Explorer](https://godbolt.org/z/Gn3znj).
 
@@ -111,7 +102,6 @@ int main()
 ```
 
 ## Circular Queue
-<a id="markdown-circular-queue" name="circular-queue"></a>
 
 The `circular_queue` class is a fixed capacity, STL-style, templated circular buffer.
 
@@ -126,7 +116,6 @@ Both vectors and the `circular_queue` provide a very similar interface and can b
 For operations that involve frequent insertion or removals of elements at positions other than the beginning or the end, `circular_queue` performs worse and has less consistent iterators and references than lists and forward lists.
 
 ### Example
-<a id="markdown-example" name="example"></a>
 
 Run it live on [Compiler Explorer](https://godbolt.org/z/f3dscW).
 
