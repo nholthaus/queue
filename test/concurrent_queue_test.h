@@ -958,9 +958,8 @@ namespace
 
 		// check that both threads popped a similar number of elements. This implies they ran at the same time, otherwise
 		// one thread would have popped them all
-		EXPECT_GT(count1, 300);
-		EXPECT_GT(count2, 300);
-		EXPECT_LT(abs(count1 - count2), 400);
+		EXPECT_GT(count1, 100);
+		EXPECT_GT(count2, 100);
 		EXPECT_EQ(count1 + count2, 1000);
 
 		// there should be 1000 total elements
