@@ -566,7 +566,7 @@ public:
 	/// @param lhs container to swap with rhs
 	/// @param rhs container to swap with lhs
 	template<class Ty, template<class, class> class Q, class A>
-	friend void std::swap(concurrent_queue<Ty, Q, A>& lhs, concurrent_queue<Ty, Q, A>& rhs);
+	friend void swap(concurrent_queue<Ty, Q, A>& lhs, concurrent_queue<Ty, Q, A>& rhs);
 
 	/// @}
 
@@ -664,7 +664,7 @@ namespace std
 			typename concurrent_queue<T, Queue, Alloc>::read_lock_type lock_rhs(rhs.mutex, std::defer_lock);
 			std::scoped_lock                                           lock(lock_lhs, lock_rhs);
 
-			std::swap(lhs.queue, rhs.queue);
+			swap(lhs.queue, rhs.queue);
 		}
 	}
 }    // namespace std
