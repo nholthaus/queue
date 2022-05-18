@@ -566,7 +566,7 @@ public:
 	/// @param lhs container to swap with rhs
 	/// @param rhs container to swap with lhs
 	template<class Ty, template<class, class> class Q, class A>
-	friend void std::swap(concurrent_queue<Ty, Q, A>& lhs, concurrent_queue<Ty, Q, A>& rhs);
+	friend void swap(concurrent_queue<Ty, Q, A>& lhs, concurrent_queue<Ty, Q, A>& rhs);
 
 	/// @}
 
@@ -652,21 +652,18 @@ inline bool operator!=(const concurrent_queue<T, Queue, Alloc>& lhs, const concu
 	return !(lhs == rhs);
 }
 
-namespace std
+/// @brief Swap Operator
+template<class T, template<class, class> class Queue = std::deque, class Alloc = std::allocator<T>>
+inline void swap(concurrent_queue<T, Queue, Alloc>& lhs, concurrent_queue<T, Queue, Alloc>& rhs)
 {
-	/// @brief Swap Operator
-	template<class T, template<class, class> class Queue = std::deque, class Alloc = std::allocator<T>>
-	inline void swap(concurrent_queue<T, Queue, Alloc>& lhs, concurrent_queue<T, Queue, Alloc>& rhs)
+	if (&lhs != &rhs)
 	{
-		if (&lhs != &rhs)
-		{
-			typename concurrent_queue<T, Queue, Alloc>::read_lock_type lock_lhs(lhs.mutex, std::defer_lock);
-			typename concurrent_queue<T, Queue, Alloc>::read_lock_type lock_rhs(rhs.mutex, std::defer_lock);
-			std::scoped_lock                                           lock(lock_lhs, lock_rhs);
+		typename concurrent_queue<T, Queue, Alloc>::read_lock_type lock_lhs(lhs.mutex, std::defer_lock);
+		typename concurrent_queue<T, Queue, Alloc>::read_lock_type lock_rhs(rhs.mutex, std::defer_lock);
+		std::scoped_lock                                           lock(lock_lhs, lock_rhs);
 
-			std::swap(lhs.queue, rhs.queue);
-		}
+		std::swap(lhs.queue, rhs.queue);
 	}
-}    // namespace std
+}
 
 #endif    // concurrent_queue_h__

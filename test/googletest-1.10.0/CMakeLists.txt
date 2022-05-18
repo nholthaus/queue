@@ -197,11 +197,10 @@ foreach(LIBRARY ${PROJECT_LIBRARIES})
     ${PROJECT_LIBRARY_OUTPUT_DIRECTORY}/${PROJECT_LIBRARY_PREFIX}${LIBRARY}${PROJECT_LIBRARY_SUFFIX}
   )
   # can't use generator expressions here so grab the debug byproducts if necessary
-  if(PROJECT_USES_D_FOR_DEBUG_LIBRARIES)
-    list(APPEND BYPRODUCTS
-      ${PROJECT_LIBRARY_OUTPUT_DIRECTORY}/${PROJECT_LIBRARY_PREFIX}${LIBRARY}d${PROJECT_LIBRARY_SUFFIX}
-    )
-  endif()
+  list(APPEND BYPRODUCTS
+    ${PROJECT_LIBRARY_OUTPUT_DIRECTORY}/${PROJECT_LIBRARY_PREFIX}${LIBRARY}${DEBUG_POSTFIX}${PROJECT_LIBRARY_SUFFIX}
+  )
+  list(REMOVE_DUPLICATES BYPRODUCTS)
 endforeach(LIBRARY ${PROJECT_LIBRARIES})
 
 # ----------------------------------------------------------------------------------------------------------------------
