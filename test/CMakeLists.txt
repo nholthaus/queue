@@ -8,14 +8,14 @@ cmake_minimum_required(VERSION 3.7)
 #	PROJECT SETTINGS
 #-------------------------------------------------------------------------------
 
-PROJECT(QueueTest CXX)
+PROJECT(queueTest CXX)
 
 #-------------------------------------------------------------------------------
 #	3rd Party
 #-------------------------------------------------------------------------------
 
 find_package(Threads)
-add_subdirectory(googletest-1.10.0)
+add_subdirectory(googletest-1.14.0)
 
 #-------------------------------------------------------------------------------
 #	SOURCE CODE
@@ -47,7 +47,7 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 #-------------------------------------------------------------------------------
 
 list(APPEND LIBRARIES
-        googletest
+        gtest
         queue
     )
 

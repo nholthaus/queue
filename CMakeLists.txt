@@ -3,16 +3,41 @@
 #-------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.7)
-LIST(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
-option(BUILD_TESTS "Build the unit tests" OFF)
-option(BUILD_DOCUMENTATION "Build the documentation" OFF)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 #-------------------------------------------------------------------------------
 #	PROJECT SETTINGS
 #-------------------------------------------------------------------------------
 
-PROJECT(queue CXX)
-set(CMAKE_CXX_STANDARD 17)
+project(queue CXX)
+set(CMAKE_CXX_STANDARD 20)
+string(TOUPPER ${PROJECT_NAME} PROJECT_NAME_UPPER)
+set(PROJECT_DESCRIPTION "A C++${CMAKE_CXX_STANDARD} library of various `${PROJECT_NAME}` containers")
+set(PROJECT_VERSION ${GIT_TAG})
+
+#-------------------------------------------------------------------------------
+#   MAIN PROJECT
+#-------------------------------------------------------------------------------
+
+set(${PROJECT_NAME_UPPER}_IS_MAIN_PROJECT false)
+if (${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_SOURCE_DIR})
+	set(${PROJECT_NAME_UPPER}_IS_MAIN_PROJECT true)
+endif ()
+
+#-------------------------------------------------------------------------------
+#   OPTIONS
+#-------------------------------------------------------------------------------
+
+option(${PROJECT_NAME_UPPER}_BUILD_DOCUMENTATION "Build the documentation" ${${PROJECT_NAME_UPPER}_IS_MAIN_PROJECT})
+option(${PROJECT_NAME_UPPER}_BUILD_TESTS "Build the unit tests" ${${PROJECT_NAME_UPPER}_IS_MAIN_PROJECT})
+
+if (${${PROJECT_NAME_UPPER}_IS_MAIN_PROJECT})
+	include(gitInfo)
+	message(STATUS "${PROJECT_NAME} main project: ${${PROJECT_NAME_UPPER}_IS_MAIN_PROJECT}")
+	message(STATUS "${PROJECT_NAME} build documentation: ${${PROJECT_NAME_UPPER}_BUILD_DOCUMENTATION}")
+	message(STATUS "${PROJECT_NAME} build tests: ${${PROJECT_NAME_UPPER}_BUILD_TESTS}")
+	message(STATUS "${PROJECT_NAME} using C++ ISO standard: C++${CMAKE_CXX_STANDARD}")
+endif ()
 
 #-------------------------------------------------------------------------------
 #	SOURCE CODE
@@ -20,18 +45,18 @@ set(CMAKE_CXX_STANDARD 17)
 
 # .h files
 list(APPEND HEADER_FILES
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/concurrent_queue.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/circular_queue.h
-    )
+     ${CMAKE_CURRENT_SOURCE_DIR}/include/concurrent_queue.h
+     ${CMAKE_CURRENT_SOURCE_DIR}/include/circular_queue.h
+     )
 
 # .cpp files
 list(APPEND SOURCE_FILES
 
-    )
+     )
 
-if(MSVC)
-    list(APPEND SOURCE_FILES ${HEADER_FILES})
-endif()
+if (MSVC)
+	list(APPEND SOURCE_FILES ${HEADER_FILES})
+endif ()
 
 #-------------------------------------------------------------------------------
 #	INCLUDE DIRECTORIES
@@ -53,26 +78,15 @@ set_target_properties(${PROJECT_NAME} PROPERTIES INTERFACE_INCLUDE_DIRECTORIES $
 #	UNIT TESTS
 #-------------------------------------------------------------------------------
 
-if(BUILD_TESTS)
-    enable_testing(true)
-    add_subdirectory(test)
-endif()
+if (${${PROJECT_NAME_UPPER}_BUILD_TESTS})
+	enable_testing(true)
+	add_subdirectory(test)
+endif (${${PROJECT_NAME_UPPER}_BUILD_TESTS})
 
 #-------------------------------------------------------------------------------
-#	DOXYGEN
+#	DOCUMENTATION
 #-------------------------------------------------------------------------------
-
-if(BUILD_DOCUMENTATION)
-    find_package(Doxygen)
-    if(NOT DOXYGEN_FOUND)
-        message(WARNING "Doxygen not found, unable to generate documentation")
-    else()
-        find_package(Git)
-        include(gitInfo)
-        configure_file(Doxyfile.in ${CMAKE_BINARY_DIR}/Doxyfile @ONLY)
-        add_custom_target(documentation COMMAND ${DOXYGEN_EXECUTABLE} "${CMAKE_BINARY_DIR}/Doxyfile"
-            WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY}
-            COMMENT "Building the documentation..."
-        )
-    endif()
-endif()
+if (${${PROJECT_NAME_UPPER}_BUILD_DOCUMENTATION})
+	include(doxygen)
+	add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_documentation)
+endif (${${PROJECT_NAME_UPPER}_BUILD_DOCUMENTATION})

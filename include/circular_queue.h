@@ -38,8 +38,8 @@
 //--------------------------------------------------------------------------------------------------
 
 #pragma once
-#ifndef circular_queue_h__
-#define circular_queue_h__
+#ifndef circular_queue_h_
+#define circular_queue_h_
 
 //------------------------
 //	INCLUDES
@@ -468,7 +468,7 @@ public:
          *				<b> Data Races:</b> the object is accessed but NOT modified.\n
          *				<b> Exception Safety:</b> Strong guarantee: if the constructor throws an
          *					exception, there are no side effects.\n
-         * @param[in]	nNumber of elements to offset. Member type difference_type is an alias of the
+         * @param[in]	n Number of elements to offset. Member type difference_type is an alias of the
          *				base container's own difference type.\n
          * @returns		An iterator decremented n positions from the current iterator position.
          */
@@ -918,7 +918,7 @@ public:
         *				<b> Data Races:</b> the object is accessed but NOT modified.\n
         *				<b> Exception Safety:</b> Strong guarantee: if the constructor throws an
         *					exception, there are no side effects.\n
-        * @param[in]	nNumber of elements to offset. Member type difference_type is an alias of the
+        * @param[in]	n Number of elements to offset. Member type difference_type is an alias of the
         *				base container's own difference type.\n
         * @returns		An iterator decremented n positions from the current iterator position.
         */
@@ -1043,7 +1043,7 @@ public:
 		}
 
 		/// Allow implicit conversion from iterator to const_iterator as required by STL
-		operator const_iterator() const
+		explicit operator const_iterator() const
 		{
 			return const_iterator(m_buffer, m_pointer);
 		}
@@ -3070,8 +3070,6 @@ protected:
      * @details		Takes care of wrapping the pointer and keeping parity consistent.
      * @param[in]	p pointer to increment. This function modifies the value of p.
      * @param[in]	n number of elements to increment the pointer
-     * @param[in]	parity parity bit associated with the pointer. This function modifies the value
-     *				of parity.
      */
 	inline queue_pointer increment(queue_pointer p, difference_type n) const noexcept
 	{
