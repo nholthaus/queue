@@ -1043,7 +1043,7 @@ public:
 		}
 
 		/// Allow implicit conversion from iterator to const_iterator as required by STL
-		explicit operator const_iterator() const
+		operator const_iterator() const
 		{
 			return const_iterator(m_buffer, m_pointer);
 		}
