@@ -1303,7 +1303,7 @@ public:
 		for (const_iterator itr = this->begin(), otherItr = other.begin(); otherItr != other.end(); ++itr, ++otherItr)
 		{
 			// copy construct
-			std::allocator_traits<Alloc>::construct(m_alloc, &itr, *otherItr);
+			std::allocator_traits<Alloc>::construct(m_alloc, const_cast<pointer>(&itr), *otherItr);
 		}
 	}
 
@@ -1415,7 +1415,7 @@ public:
 		for (const_iterator itr = this->begin(), otherItr = other.begin(); otherItr != other.end(); ++itr, ++otherItr)
 		{
 			// copy construct
-			std::allocator_traits<Alloc>::construct(m_alloc, &itr, *otherItr);
+			std::allocator_traits<Alloc>::construct(m_alloc, const_cast<pointer>(&itr), *otherItr);
 		}
 
 		return *this;
