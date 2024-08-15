@@ -13,6 +13,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build-artifacts
+          path: ./artifacts
+
       - name: Set up Node.js (if you're using it for changelog generation)
         uses: actions/setup-node@v4
         with:
@@ -24,14 +30,13 @@ jobs:
       - name: Generate Changelog
         run: npx conventional-changelog -p angular -i CHANGELOG.md -s
 
-      - name: Prepare Build and Document
+      - name: Create GitHub release
         run: |
           # Extract the tag name from the Git ref
           TAG_NAME="${GITHUB_REF#refs/tags/}"
           
-          # Define the CMake binary directory and document path
-          CMAKE_BINARY_DIR="build" # Adjust if your binary directory is named differently
-          DOCUMENT_PATH="${CMAKE_BINARY_DIR}/doc/latex/queue-${TAG_NAME}.pdf"
+          # Define the document path based on the tag name
+          DOCUMENT_PATH="./artifacts/doc/latex/queue-${TAG_NAME}.pdf"
           
           # Check if the document file exists
           if [ ! -f "$DOCUMENT_PATH" ]; then
