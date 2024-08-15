@@ -25,16 +25,9 @@ jobs:
         run: npx conventional-changelog -p angular -i CHANGELOG.md -s
 
       - name: Create GitHub release
-        id: create-release
-        uses: gh-actions/release@v2
-        with:
-          files: CHANGELOG.md
+        run: |
+          # Create a release using the GitHub CLI
+          gh release create ${{ github.ref }} CHANGELOG.md --title "Release ${{ github.ref }}" --notes "Changelog for ${{ github.ref }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Changelog to Release
-        run: |
-          echo "Uploading CHANGELOG.md to release"
-          gh release upload ${{ github.ref }} CHANGELOG.md --clobber
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
