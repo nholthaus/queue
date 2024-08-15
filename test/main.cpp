@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 #include <type_traits>
 
+
 int main(int argc, char* argv[])
 {
 	::testing::InitGoogleTest(&argc, argv);

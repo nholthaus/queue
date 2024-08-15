@@ -24,10 +24,22 @@ jobs:
       - name: Generate Changelog
         run: npx conventional-changelog -p angular -i CHANGELOG.md -s
 
-      - name: Create GitHub release
+      - name: Prepare Build and Document
         run: |
-          # Create a release using the GitHub CLI
-          gh release create ${{ github.ref }} CHANGELOG.md --title "Release ${{ github.ref }}" --notes "Changelog for ${{ github.ref }}"
+          # Extract the tag name from the Git ref
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          
+          # Define the CMake binary directory and document path
+          CMAKE_BINARY_DIR="build" # Adjust if your binary directory is named differently
+          DOCUMENT_PATH="${CMAKE_BINARY_DIR}/doc/latex/queue-${TAG_NAME}.pdf"
+          
+          # Check if the document file exists
+          if [ ! -f "$DOCUMENT_PATH" ]; then
+            echo "Document file $DOCUMENT_PATH does not exist. Exiting."
+            exit 1
+          fi
+
+          # Create a release using the GitHub CLI with the tag name as the release name
+          gh release create "$TAG_NAME" CHANGELOG.md "$DOCUMENT_PATH" --title "$TAG_NAME" --notes "Changelog for $TAG_NAME"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
