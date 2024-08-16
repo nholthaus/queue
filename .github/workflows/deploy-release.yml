@@ -39,7 +39,7 @@ jobs:
           TAG_NAME="${GITHUB_REF#refs/tags/}"
           
           # Define the document path based on the tag name
-          DOCUMENT_PATH="./artifacts/doc/latex/queue-${TAG_NAME}.pdf"
+          DOCUMENT_PATH="./artifacts/*.pdf"
           
           # Check if the document file exists
           if [ ! -f "$DOCUMENT_PATH" ]; then

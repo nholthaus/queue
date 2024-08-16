@@ -44,7 +44,7 @@ jobs:
           echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
       - name: Install Doxygen on Ubuntu
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && matrix.c_compiler == 'gcc'
         run: sudo apt-get update && sudo apt-get install -y doxygen texlive-latex-base texlive-fonts-recommended texlive-fonts-extra texlive-latex-extra
 
       - name: Configure CMake
@@ -63,11 +63,11 @@ jobs:
         run: ctest --build-config ${{ matrix.build_type }}
 
       - name: Generate Documentation
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && matrix.c_compiler == 'gcc'
         run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --target queue_documentation
 
       - name: Upload Artifacts
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && matrix.c_compiler == 'gcc'
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
