@@ -662,7 +662,7 @@ inline void swap(concurrent_queue<T, Queue, Alloc>& lhs, concurrent_queue<T, Que
 		typename concurrent_queue<T, Queue, Alloc>::read_lock_type lock_rhs(rhs.mutex, std::defer_lock);
 		std::scoped_lock                                           lock(lock_lhs, lock_rhs);
 
-		std::swap(lhs.queue, rhs.queue);
+		swap(lhs.queue, rhs.queue);
 	}
 }
 
