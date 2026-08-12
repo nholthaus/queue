@@ -71,7 +71,7 @@
 ///          or iterators are always valid. It's not a guarantee of element initialization, or of a particular traversal order.
 /// @tparam T The data type of the elements to be stored in the queue.
 /// @tparam Queue Underlying concurrent queue data structure. Defaults to `std::deque`.
-/// @tparam AllocThe type that represents the stored allocator object that encapsulates details about the allocation and deallocation
+/// @tparam Alloc The type that represents the stored allocator object that encapsulates details about the allocation and deallocation
 ///         of memory for this concurrent queue. This argument is optional and the default value is allocator<T>.
 template<class T, template<class, class> class Queue = std::deque, class Alloc = std::allocator<T>>
 class concurrent_queue
@@ -202,7 +202,7 @@ public:
 
 	/// @{
 	/// @name Destructor
-	
+
 	/// @brief Destructor
 	/// @details Destructs the concurrent queue. The destructors of the elements are called and the used storage is deallocated.
 	///          Note, that if the elements are pointers, the pointed-to objects are not destroyed.
@@ -254,9 +254,9 @@ public:
 
 	/// @{
 	/// @name Thread-safe Public Members
-	/// @details These methods are safe for use in situations where the queue will be concurrently accessed by 
+	/// @details These methods are safe for use in situations where the queue will be concurrently accessed by
 	///          multiple threads.
-	
+
 	/// @brief Clears the concurrent queue, destroying any currently enqueued elements.
 	/// @details This method is not concurrency-safe, and invalidates all iterators.
 	inline void clear() noexcept
@@ -500,8 +500,8 @@ public:
 
 	/// @{
 	/// @name Access Control
-	/// @details These methods provide the ability to lock the concurrent_queue for thread-safe iteration. They are 
-	///          primarily intended for test and debug use, and care must be taken when explicitely locking the queue to 
+	/// @details These methods provide the ability to lock the concurrent_queue for thread-safe iteration. They are
+	///          primarily intended for test and debug use, and care must be taken when explicitely locking the queue to
 	///			 avoid deadlock. These methods are NOT recommended for production code, and will produce warnings when used.
 
 	/// @brief  Lock the queue in a manner in which it is safe for multiple threads to read-iterate over it

@@ -47,11 +47,11 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <initializer_list>
 #include <iterator>
 #include <stdexcept>
-#include <cstdint>
 #include <type_traits>
 
 //	----------------------------------------------------------------------------
@@ -131,7 +131,7 @@ public:
 	{
 		queue_pointer(pointer p, bool par)
 		    : ptr(p)
-		    , parity(par){};
+		    , parity(par) {};
 		pointer ptr;
 		bool    parity;
 	};
@@ -141,7 +141,7 @@ public:
 	{
 		const_queue_pointer(pointer p, bool par)
 		    : ptr(p)
-		    , parity(par){};
+		    , parity(par) {};
 		const_pointer ptr;
 		bool          parity;
 	};
@@ -188,21 +188,21 @@ public:
          */
 		const_iterator(const circular_queue* buffer, pointer start, bool parity) noexcept
 		    : m_buffer(buffer)
-		    , m_pointer(start, parity){
+		    , m_pointer(start, parity) {
 
-		      };
+		    };
 
 		const_iterator(const circular_queue* buffer, queue_pointer pointer) noexcept
 		    : m_buffer(buffer)
-		    , m_pointer(pointer){
+		    , m_pointer(pointer) {
 
-		      };
+		    };
 
 		const_iterator()
 		    : m_buffer(nullptr)
-		    , m_pointer(nullptr, false){
+		    , m_pointer(nullptr, false) {
 
-		      };
+		    };
 
 		const_iterator(const const_iterator& other) = default;
 
@@ -356,8 +356,8 @@ public:
          */
 		inline const_iterator operator++(int)
 		{
-            const_iterator tmp(*this);
-			     operator++();
+			const_iterator tmp(*this);
+			operator++();
 			return tmp;
 		}
 
@@ -433,8 +433,8 @@ public:
          */
 		inline const_iterator operator--(int)
 		{
-            const_iterator tmp(*this);
-			     operator--();
+			const_iterator tmp(*this);
+			operator--();
 			return tmp;
 		}
 
@@ -639,23 +639,23 @@ public:
         */
 		iterator(const circular_queue* const buffer, pointer start, bool parity) noexcept
 		    : m_buffer(buffer)
-		    , m_pointer(start, parity){
+		    , m_pointer(start, parity) {
 
-		      };
+		    };
 
 		iterator(const circular_queue* const buffer, queue_pointer pointer) noexcept
 		    : m_buffer(buffer)
-		    , m_pointer(pointer){
+		    , m_pointer(pointer) {
 
-		      };
+		    };
 
 		iterator()
 		    : m_buffer(nullptr)
-		    , m_pointer(nullptr, false){
+		    , m_pointer(nullptr, false) {
 
-		      };
+		    };
 
-		iterator(const iterator& other) = default;
+		iterator(const iterator& other)            = default;
 		iterator& operator=(const iterator& other) = default;
 
 		iterator(iterator&& other) noexcept
@@ -808,7 +808,7 @@ public:
 		inline iterator operator++(int)
 		{
 			auto tmp(*this);
-			     operator++();
+			operator++();
 			return tmp;
 		}
 
@@ -884,7 +884,7 @@ public:
 		inline iterator operator--(int)
 		{
 			auto tmp(*this);
-			     operator--();
+			operator--();
 			return tmp;
 		}
 
