@@ -46,9 +46,6 @@
 //------------------------
 #include <algorithm>
 #include <cassert>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
 #include <initializer_list>
 #include <iterator>
 #include <stdexcept>
@@ -253,7 +250,7 @@ public:
         *				<b> Exception Safety:</b> Undefined if the iterator is not valid.\n
         * @returns		A pointer to the element pointed by the iterator.
         */
-		inline pointer operator&() const
+		pointer operator&() const
 		{
 			assert(m_buffer);
 			return this->m_pointer.ptr;
@@ -703,7 +700,7 @@ public:
         *				<b> Exception Safety:</b> Undefined if the iterator is not valid.\n
         * @returns		A pointer to the element pointed by the iterator.
         */
-		inline pointer operator&() const
+		pointer operator&() const
 		{
 			assert(m_buffer);
 			return this->m_pointer.ptr;
@@ -718,7 +715,7 @@ public:
         *				<b> Exception Safety:</b> Undefined if the iterator is not valid.\n
         * @returns		A pointer to the element pointed by the iterator.
         */
-		inline pointer operator->() const
+		pointer operator->() const
 		{
 			assert(m_buffer);
 			return this->m_pointer.ptr;
@@ -1175,7 +1172,7 @@ public:
      *				allocator.
      */
 	template<class InputIterator>
-	explicit circular_queue(InputIterator first, InputIterator last, const allocator_type& alloc = allocator_type(), typename std::enable_if<!std::is_integral<InputIterator>::value>::type* = 0)
+	explicit circular_queue(InputIterator first, InputIterator last, const allocator_type& alloc = allocator_type(), std::enable_if_t<!std::is_integral_v<InputIterator>>* = nullptr)
 	    : m_alloc(alloc)
 	    , m_capacity(last - first)
 	    , m_head(nullptr, false)
@@ -1320,7 +1317,7 @@ public:
      */
 	circular_queue(circular_queue&& other) noexcept
 	    : m_alloc(std::move(other.m_alloc))
-	    , m_capacity(std::move(other.m_capacity))
+	    , m_capacity(other.m_capacity)
 	    , m_head(std::move(other.m_head))
 	    , m_tail(std::move(other.m_tail))
 	{
@@ -1358,7 +1355,8 @@ public:
 		// destroy contents
 		clear();
 		// deallocate memory
-		m_alloc.deallocate(m_data, m_capacity);
+		if (m_data != nullptr)
+			std::allocator_traits<Alloc>::deallocate(m_alloc, m_data, m_capacity);
 	}
 
 	/** @} */    // end of destructors
@@ -1391,8 +1389,16 @@ public:
      */
 	circular_queue& operator=(const circular_queue& other)
 	{
-		// destroy and deallocate current container first
-		this->~circular_queue();
+		if (this == &other)
+			return *this;
+
+		// Destroy and deallocate the current storage without ending this object's lifetime.
+		clear();
+		if (m_data != nullptr)
+			std::allocator_traits<Alloc>::deallocate(m_alloc, m_data, m_capacity);
+		m_data = m_head.ptr = m_tail.ptr = nullptr;
+		m_capacity = 0;
+		m_head.parity = m_tail.parity = false;
 
 		if (std::allocator_traits<decltype(other.m_alloc)>::propagate_on_container_copy_assignment::value)
 		{
@@ -1440,15 +1446,23 @@ public:
      */
 	circular_queue& operator=(circular_queue&& other) noexcept
 	{
-		// destroy and deallocate current container first
-		this->~circular_queue();
+		if (this == &other)
+			return *this;
+
+		// Destroy and deallocate the current storage without ending this object's lifetime.
+		clear();
+		if (m_data != nullptr)
+			std::allocator_traits<Alloc>::deallocate(m_alloc, m_data, m_capacity);
+		m_data = m_head.ptr = m_tail.ptr = nullptr;
+		m_capacity = 0;
+		m_head.parity = m_tail.parity = false;
 
 		if (std::allocator_traits<decltype(other.m_alloc)>::propagate_on_container_move_assignment::value)
 		{
 			m_alloc = std::move(other.m_alloc);
 		}
 
-		m_capacity = std::move(other.m_capacity);
+		m_capacity = other.m_capacity;
 		m_head     = std::move(other.m_head);
 		m_tail     = std::move(other.m_tail);
 
@@ -1862,7 +1876,7 @@ public:
      */
 	void reserve(size_type n)
 	{
-		if (n <= size())
+		if (n <= capacity())
 		{
 			return;
 		}
@@ -1947,7 +1961,7 @@ public:
      */
 	void shrink_to_fit()
 	{
-		if (capacity() == size())
+		if (empty() || capacity() == size())
 		{
 			return;
 		}
@@ -2098,52 +2112,38 @@ public:
 	template<class InputIterator>
 	void assign(InputIterator first, InputIterator last)
 	{
-		static_assert(std::is_convertible<value_type, typename std::iterator_traits<InputIterator>::value_type>::value,
+		static_assert(std::is_convertible_v<value_type, typename std::iterator_traits<InputIterator>::value_type>,
 		              "InputIterator::value_type is not compatible with this container's value_type");
 
 		// check that there is a valid range
-		difference_type distance = last - first;
+		const difference_type distance = last - first;
 		if (distance == 0)
 		{
 			throw std::length_error("Cannot assign capacity of 0");
 		}
 
-		// delete and deallocate current contents
-		this->~circular_queue();
-
-		// set new capacity
-		m_capacity = distance;
-
-		// allocate raw memory near this class.
+		clear();
+		std::allocator_traits<Alloc>::deallocate(m_alloc, m_data, m_capacity);
+		m_capacity = static_cast<size_type>(distance);
+		m_data = nullptr;
 		try
 		{
 			m_data = std::allocator_traits<Alloc>::allocate(m_alloc, m_capacity, this);
 		}
 		catch (...)
 		{
-			// transparent exceptions
-			// leave container in valid state
 			m_capacity = 0;
-			m_head.ptr = m_tail.ptr = m_data = nullptr;
-			m_head.parity = m_tail.parity = false;
-			throw std::bad_alloc();
+			m_head = m_tail = queue_pointer(nullptr, false);
+			throw;
 		}
-
-		m_head.ptr = m_tail.ptr = m_data;
-		m_head.parity = m_tail.parity = false;
-
-		// fill class
+		m_head = m_tail = queue_pointer(m_data, false);
 		try
 		{
-			// fill container by copy constructing from the iterators
 			for (auto itr = first; itr != last; ++itr)
-			{
 				emplace_back(*itr);
-			}
 		}
 		catch (...)
 		{
-			// if this fails, delete whats been made
 			clear();
 			throw;
 		}
@@ -2174,43 +2174,28 @@ public:
 			throw std::length_error("Cannot assign capacity of 0");
 		}
 
-		// delete and deallocate current contents
-		this->~circular_queue();
-
-		// set new capacity
+		clear();
+		std::allocator_traits<Alloc>::deallocate(m_alloc, m_data, m_capacity);
 		m_capacity = n;
-
-		// allocate raw memory near this class.
+		m_data = nullptr;
 		try
 		{
-			m_data = std::allocator_traits<Alloc>::allocate(m_alloc, m_capacity > n ? m_capacity : n, this);
+			m_data = std::allocator_traits<Alloc>::allocate(m_alloc, m_capacity, this);
 		}
 		catch (...)
 		{
-			// transparent exceptions
-			// leave container in valid state
 			m_capacity = 0;
-			m_head.ptr = m_tail.ptr = m_data = nullptr;
-			m_head.parity = m_tail.parity = false;
-			throw std::bad_alloc();
+			m_head = m_tail = queue_pointer(nullptr, false);
+			throw;
 		}
-
-		m_head.ptr = m_tail.ptr = m_data;
-		m_head.parity = m_tail.parity = false;
-
-		// fill class
+		m_head = m_tail = queue_pointer(m_data, false);
 		try
 		{
-			// fill container by copy constructing val
 			for (size_type i = 0; i < n; ++i)
-			{
 				emplace_back(val);
-			}
 		}
 		catch (...)
 		{
-			// if this fails, cleanup what's been done and then re-throw
-			// if this fails, delete whats been made
 			clear();
 			throw;
 		}
@@ -2244,46 +2229,7 @@ public:
 			throw std::length_error("Cannot assign capacity of 0");
 		}
 
-		// delete and deallocate current contents
-		this->~circular_queue();
-
-		// set new capacity
-		m_capacity = il.size();
-
-		// allocate raw memory near this class.
-		try
-		{
-			m_data = std::allocator_traits<Alloc>::allocate(m_alloc, m_capacity, this);
-		}
-		catch (...)
-		{
-			// transparent exceptions
-			// leave container in valid state
-			m_capacity = 0;
-			m_head.ptr = m_tail.ptr = m_data = nullptr;
-			m_head.parity = m_tail.parity = false;
-			throw std::bad_alloc();
-		}
-
-		m_head.ptr = m_tail.ptr = m_data;
-		m_head.parity = m_tail.parity = false;
-
-		// fill class
-		try
-		{
-			// fill container by copy constructing val
-			for (auto itr = il.begin(); itr != il.end(); ++itr)
-			{
-				emplace_back(*itr);
-			}
-		}
-		catch (...)
-		{
-			// if this fails, cleanup what's been done and then re-throw
-			// if this fails, delete whats been made
-			clear();
-			throw;
-		}
+		assign(il.begin(), il.end());
 	}
 
 	/**
@@ -2676,10 +2622,10 @@ public:
 	template<class InputIterator>
 	iterator insert(const_iterator position, InputIterator first, InputIterator last)
 	{
-		static_assert(std::is_base_of<std::forward_iterator_tag, typename std::iterator_traits<InputIterator>::iterator_category>::value,
+		static_assert(std::is_base_of_v<std::forward_iterator_tag, typename std::iterator_traits<InputIterator>::iterator_category>,
 		              "Insert (range) requires InputIterator to be at least a forward iterator.");
 
-		static_assert(std::is_convertible<typename std::iterator_traits<InputIterator>::value_type, value_type>::value,
+		static_assert(std::is_convertible_v<typename std::iterator_traits<InputIterator>::value_type, value_type>,
 		              "InputIterator::value_type is not implicitly convertible to circular_queue::value_type.");
 
 		assert(position.m_buffer == this);
@@ -3034,27 +2980,27 @@ public:
      * @param[in]	first iterator to the first index to be copied.
      * @param[in]	last iterator to the last index to be copied.
      * @param[out]	destination output buffer where the data will be copied to.
-     * @param[in]	copy functor used to perform the memory copy. Options may include memcpy, memmove,
+     * @param[in]	cf functor used to perform the memory copy. Options may include memcpy, memmove,
      *				or bound versions of cudaMemcpy, cudaMemcpyAsync. Must have a signature of
      *				copyFunctor(void* destination, void* source, size_t sizeInBytesToCopy)
      * @returns		forwards the return value of <i>copyFunctor</i>.
      */
 	template<class copyFunctor>
-	auto copy(const_iterator first, const_iterator last, value_type* destination, copyFunctor cf) const -> decltype(cf((void*) destination, (void*) first.m_pointer.ptr, ((last.m_pointer.ptr - first.m_pointer.ptr) * sizeof(value_type))))
+	auto copy(const_iterator first, const_iterator last, value_type* destination, copyFunctor cf) const -> decltype(cf(static_cast<void*>(destination), static_cast<void*>(first.m_pointer.ptr), ((last.m_pointer.ptr - first.m_pointer.ptr) * sizeof(value_type))))
 	{
 
 		if (first.m_pointer.parity == last.m_pointer.parity)
 		{
 			// straight copy when the iterators have the same parity
-			return cf((void*) destination, (void*) first.m_pointer.ptr, ((last.m_pointer.ptr - first.m_pointer.ptr) * sizeof(value_type)));
+			return cf(static_cast<void*>(destination), static_cast<void*>(first.m_pointer.ptr), ((last.m_pointer.ptr - first.m_pointer.ptr) * sizeof(value_type)));
 		}
 		else
 		{
 			// if the buffer is wrapped, we need to mem copy in two parts
 			size_t firstChunkSize = m_data + m_capacity - first.m_pointer.ptr;    // units of value_type, NOT bytes
 
-			cf((void*) destination, (void*) first.m_pointer.ptr, firstChunkSize * sizeof(value_type));
-			return cf(destination + firstChunkSize, (void*) m_data, (last.m_pointer.ptr - m_data) * sizeof(value_type));
+			cf(static_cast<void*>(destination), static_cast<void*>(first.m_pointer.ptr), firstChunkSize * sizeof(value_type));
+			return cf(destination + firstChunkSize, static_cast<void*>(m_data), (last.m_pointer.ptr - m_data) * sizeof(value_type));
 		}
 	}
 
@@ -3204,7 +3150,7 @@ protected:
 			{
 				std::allocator_traits<Alloc>::construct(m_alloc, newDataItr, std::move(front));
 				pop_front();    // this provides some exception safety by making sure the container state is always valid, even though we're going to overwrite it in a few lines.
-				newDataItr++;
+				++newDataItr;
 			}
 		}
 		catch (...)
@@ -3313,4 +3259,4 @@ protected:
 	queue_pointer m_tail;        ///< Points to the logical end of the buffer. No memory ownership!
 };
 
-#endif    // circular_queue_h__
+#endif    // circular_queue_h_

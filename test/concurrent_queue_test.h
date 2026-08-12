@@ -1,7 +1,9 @@
 #include <concurrent_queue.h>
 
 #include <algorithm>
+#include <barrier>
 #include <future>
+#include <list>
 #include <memory>
 #include <memory_resource>
 #include <numeric>
@@ -408,6 +410,43 @@ namespace
 	}
 
 	//------------------------------------------------------------------------------------------------------------------
+	TEST_F(concurrent_queue_test, self_assignment)
+	{
+		concurrent_queue<int> queue{1, 2, 3};
+
+		queue = queue;
+		EXPECT_EQ(queue, (concurrent_queue<int>{1, 2, 3}));
+
+		queue = std::move(queue);
+		EXPECT_EQ(queue, (concurrent_queue<int>{1, 2, 3}));
+	}
+
+	//------------------------------------------------------------------------------------------------------------------
+	TEST_F(concurrent_queue_test, assignment_operators_replace_contents)
+	{
+		concurrent_queue<int> source{1, 2, 3};
+		concurrent_queue<int> copy_target{9};
+		copy_target = source;
+		EXPECT_EQ(copy_target, source);
+
+		concurrent_queue<int> move_target{8, 9};
+		move_target = std::move(copy_target);
+		EXPECT_EQ(move_target, source);
+		EXPECT_TRUE(copy_target.empty());
+	}
+
+	//------------------------------------------------------------------------------------------------------------------
+	TEST_F(concurrent_queue_test, supports_non_random_access_underlying_queue)
+	{
+		concurrent_queue<int, std::list> lhs{1, 2, 3};
+		concurrent_queue<int, std::list> rhs{1, 2, 3};
+
+		EXPECT_EQ(lhs, rhs);
+		swap(lhs, rhs);
+		EXPECT_EQ(lhs, rhs);
+	}
+
+	//------------------------------------------------------------------------------------------------------------------
 	TEST_F(concurrent_queue_test, acquire_read_lock)
 	{
 		// make sure the lock can outlive the class without crashing
@@ -485,6 +524,7 @@ namespace
 	TEST_F(concurrent_queue_test, emplace_threads)
 	{
 		concurrent_queue<int> a;
+		std::barrier          iteration{2};
 
 		// ensure we actually have different threads
 		std::thread::id main_thread_id = std::this_thread::get_id();
@@ -501,24 +541,22 @@ namespace
 		EXPECT_EQ(evens.front(), 2);
 		EXPECT_EQ(evens.back(), 1000);
 
-		// Make sure the thread loops have at least a 1ms sleep in them... otherwise it seems like the compiler vectorizes
-		// the loops and runs them sequentially. Not bad as an optimization, but it defeats the purpose of testing two
-		// competing threads banging on the concurrent_queue
-		auto even_thread = std::async(std::launch::async, [evens, &a]
+		// Synchronize every iteration so both producers remain active for the entire workload.
+		auto even_thread = std::async(std::launch::async, [evens, &a, &iteration]
 		                              {
 			                              for (int i : evens)
 			                              {
+				                              iteration.arrive_and_wait();
 				                              a.emplace(i);
-				                              std::this_thread::sleep_for(1ms);
 			                              }
 			                              return std::this_thread::get_id();
 		                              });
-		auto odd_thread  = std::async(std::launch::async, [odds, &a]
+		auto odd_thread  = std::async(std::launch::async, [odds, &a, &iteration]
                                      {
                                          for (int i : odds)
                                          {
-                                             a.emplace(i);
-                                             std::this_thread::sleep_for(1ms);
+				                             iteration.arrive_and_wait();
+				                             a.emplace(i);
                                          }
                                          return std::this_thread::get_id();
                                      });
@@ -530,14 +568,6 @@ namespace
 		EXPECT_NE(main_thread_id, odd_thread_id);
 		EXPECT_NE(main_thread_id, even_thread_id);
 		EXPECT_NE(odd_thread_id, even_thread_id);
-
-		// check for an intermix of odd/even numbers. This implies that the two threads actually ran concurrently.
-		// check the first 100 elements only because if you check the whole range, and the threads ran sequentially, it
-		// would be an unsorted set of all the evens first, then all the odds. However, if a subset at the beginning is
-		// intermingled, it means the threads ran concurrently.
-		auto end = a.begin();
-		std::advance(end, 100);
-		EXPECT_FALSE(std::is_sorted(a.begin(), end));
 
 		// there should be 1000 total elements
 		EXPECT_EQ(a.size(), 1000);
@@ -608,6 +638,7 @@ namespace
 	TEST_F(concurrent_queue_test, push_lvalue_threads)
 	{
 		concurrent_queue<int> a;
+		std::barrier          iteration{2};
 
 		// ensure we actually have different threads
 		std::thread::id main_thread_id = std::this_thread::get_id();
@@ -624,24 +655,22 @@ namespace
 		EXPECT_EQ(evens.front(), 2);
 		EXPECT_EQ(evens.back(), 1000);
 
-		// Make sure the thread loops have at least a 1ms sleep in them... otherwise it seems like the compiler vectorizes
-		// the loops and runs them sequentially. Not bad as an optimization, but it defeats the purpose of testing two
-		// competing threads banging on the concurrent_queue
-		auto even_thread = std::async(std::launch::async, [evens, &a]
+		// Synchronize every iteration so both producers remain active for the entire workload.
+		auto even_thread = std::async(std::launch::async, [evens, &a, &iteration]
 		                              {
 			                              for (int i : evens)
 			                              {
+				                              iteration.arrive_and_wait();
 				                              a.push(i);
-				                              std::this_thread::sleep_for(1ms);
 			                              }
 			                              return std::this_thread::get_id();
 		                              });
-		auto odd_thread  = std::async(std::launch::async, [odds, &a]
+		auto odd_thread  = std::async(std::launch::async, [odds, &a, &iteration]
                                      {
                                          for (int i : odds)
                                          {
-                                             a.push(i);
-                                             std::this_thread::sleep_for(1ms);
+				                             iteration.arrive_and_wait();
+				                             a.push(i);
                                          }
                                          return std::this_thread::get_id();
                                      });
@@ -653,14 +682,6 @@ namespace
 		EXPECT_NE(main_thread_id, odd_thread_id);
 		EXPECT_NE(main_thread_id, even_thread_id);
 		EXPECT_NE(odd_thread_id, even_thread_id);
-
-		// check for an intermix of odd/even numbers. This implies that the two threads actually ran concurrently.
-		// check the first 100 elements only because if you check the whole range, and the threads ran sequentially, it
-		// would be an unsorted set of all the evens first, then all the odds. However, if a subset at the beginning is
-		// intermingled, it means the threads ran concurrently.
-		auto end = a.begin();
-		std::advance(end, 100);
-		EXPECT_FALSE(std::is_sorted(a.begin(), end));    // This test is more critical than it looks. If it fails, odds are the test itself didn't test anything.
 
 		// there should be 1000 total elements
 		EXPECT_EQ(a.size(), 1000);
@@ -733,29 +754,32 @@ namespace
 
 		int count1 = 0;
 		int count2 = 0;
+		std::barrier iteration{2};
 
-		// Make sure the thread loops have at least a 1ms sleep in them... otherwise it seems like the compiler vectorizes
-		// the loops and runs them sequentially. Not bad as an optimization, but it defeats the purpose of testing two
-		// competing threads banging on the concurrent_queue
-		auto thread1 = std::async(std::launch::async, [&a, &count1]
+		// Each consumer wins one contested pop per round. This proves sustained overlap without scheduler sleeps.
+		auto thread1 = std::async(std::launch::async, [&a, &count1, &iteration]
 		                          {
 			                          int val;
-			                          while (!a.empty())
+			                          for (int i = 0; i < 500; ++i)
 			                          {
-				                          if (a.try_pop(val))
-					                          ++count1;
-				                          std::this_thread::sleep_for(1ms);
+				                          iteration.arrive_and_wait();
+				                          while (!a.try_pop(val))
+					                          std::this_thread::yield();
+				                          ++count1;
+				                          iteration.arrive_and_wait();
 			                          }
 			                          return std::this_thread::get_id();
 		                          });
-		auto thread2 = std::async(std::launch::async, [&a, &count2]
+		auto thread2 = std::async(std::launch::async, [&a, &count2, &iteration]
 		                          {
 			                          int val;
-			                          while (!a.empty())
+			                          for (int i = 0; i < 500; ++i)
 			                          {
-				                          if (a.try_pop(val))
-					                          ++count2;
-				                          std::this_thread::sleep_for(1ms);
+				                          iteration.arrive_and_wait();
+				                          while (!a.try_pop(val))
+					                          std::this_thread::yield();
+				                          ++count2;
+				                          iteration.arrive_and_wait();
 			                          }
 			                          return std::this_thread::get_id();
 		                          });
@@ -770,9 +794,8 @@ namespace
 
 		// check that both threads popped a similar number of elements. This implies they ran at the same time, otherwise
 		// one thread would have popped them all
-		EXPECT_GT(count1, 300);
-		EXPECT_GT(count2, 300);
-		EXPECT_LT(abs(count1 - count2), 400);
+		EXPECT_EQ(count1, 500);
+		EXPECT_EQ(count2, 500);
 		EXPECT_EQ(count1 + count2, 1000);
 
 		// there should be 1000 total elements
@@ -1084,6 +1107,8 @@ namespace
 
 		EXPECT_EQ(a,b);
 		EXPECT_NE(a,c);
+		EXPECT_EQ(a, a);
+		EXPECT_NE(a, (concurrent_queue<int>{1, 2}));
 	}
 
 	//------------------------------------------------------------------------------------------------------------------
@@ -1104,24 +1129,28 @@ namespace
 		EXPECT_EQ(numbers_out.size(), 0);
 
 		concurrent_queue<int> queue;
+		std::barrier          iteration{2};
 
-		// produce integers at 200Hz and consume them at 1000 Hz
-		auto producer = std::async(std::launch::async, [&queue, &numbers_in]
+		// Pair every production/consumption round while still racing the push against the blocking pop.
+		auto producer = std::async(std::launch::async, [&queue, &numbers_in, &iteration]
 		                           {
 			                           for (int i : numbers_in)
 			                           {
+				                           iteration.arrive_and_wait();
 				                           queue.push(i);
-				                           std::this_thread::sleep_for(5ms);
+				                           iteration.arrive_and_wait();
 			                           }
 			                           return std::this_thread::get_id();
 		                           });
-		auto consumer = std::async(std::launch::async, [&queue, &numbers_out, test_size]
+		auto consumer = std::async(std::launch::async, [&queue, &numbers_out, test_size, &iteration]
 		                           {
 			                           int val;
-			                           while (numbers_out.size() < test_size)
+			                           for (int i = 0; i < test_size; ++i)
 			                           {
-				                           if (queue.try_pop_for(val, 1ms))
-					                           numbers_out.push_back(val);
+				                           iteration.arrive_and_wait();
+				                           EXPECT_TRUE(queue.try_pop_for(val, 100ms));
+				                           numbers_out.push_back(val);
+				                           iteration.arrive_and_wait();
 			                           }
 			                           return std::this_thread::get_id();
 		                           });
@@ -1153,9 +1182,6 @@ namespace
 		std::deque<int> out1;
 		std::deque<int> out2;
 
-		std::atomic_bool finished_writting = false;
-		std::atomic_bool done = false;
-
 		std::generate_n(odds.begin(), odds.size(), generate_odd_numbers{});
 		std::generate_n(evens.begin(), evens.size(), generate_even_numbers{});
 
@@ -1167,55 +1193,55 @@ namespace
 		EXPECT_EQ(out2.size(), 0);
 
 		concurrent_queue<int> queue;
+		std::barrier          iteration{4};
 
-		// produce integers at 200Hz and consume them at 1000 Hz
-		auto producer1 = std::async(std::launch::async, [&queue, &odds]
+		// Every round has two simultaneous producers and two blocking consumers.
+		auto producer1 = std::async(std::launch::async, [&queue, &odds, &iteration]
 		                            {
-			                            while (!odds.empty())
+			                            for (int i = 0; i < 100; ++i)
 			                            {
+				                            iteration.arrive_and_wait();
 				                            queue.push(odds.front());
 				                            odds.pop_front();
-				                            std::this_thread::sleep_for(1ms);
+				                            iteration.arrive_and_wait();
 			                            }
 			                            return std::this_thread::get_id();
 		                            });
-		auto producer2 = std::async(std::launch::async, [&queue, &evens, &finished_writting]
+		auto producer2 = std::async(std::launch::async, [&queue, &evens, &iteration]
 		                            {
-			                            while (!evens.empty())
+			                            for (int i = 0; i < 100; ++i)
 			                            {
+				                            iteration.arrive_and_wait();
 				                            queue.push(evens.front());
 				                            evens.pop_front();
-				                            std::this_thread::sleep_for(5ms);
+				                            iteration.arrive_and_wait();
 			                            }
-										finished_writting = true;
 			                            return std::this_thread::get_id();
 		                            });
-		auto consumer1 = std::async(std::launch::async, [&queue, &out1, &done]
+		auto consumer1 = std::async(std::launch::async, [&queue, &out1, &iteration]
 		                            {
 			                            int val;
-			                            while (!done)
+			                            for (int i = 0; i < 100; ++i)
 			                            {
-				                            if (queue.try_pop_for(val, 2ms))
-					                            out1.push_back(val);
+				                            iteration.arrive_and_wait();
+				                            EXPECT_TRUE(queue.try_pop_for(val, 100ms));
+				                            out1.push_back(val);
+				                            iteration.arrive_and_wait();
 			                            }
 			                            return std::this_thread::get_id();
 		                            });
-		auto consumer2 = std::async(std::launch::async, [&queue, &out2, &done]
+		auto consumer2 = std::async(std::launch::async, [&queue, &out2, &iteration]
 		                            {
 			                            int val;
-			                            while (!done)
+			                            for (int i = 0; i < 100; ++i)
 			                            {
-				                            if (queue.try_pop_for(val, 4ms))
-					                            out2.push_back(val);
+				                            iteration.arrive_and_wait();
+				                            EXPECT_TRUE(queue.try_pop_for(val, 100ms));
+				                            out2.push_back(val);
+				                            iteration.arrive_and_wait();
 			                            }
 			                            return std::this_thread::get_id();
 		                            });
-
-		while(!finished_writting)
-		{
-			std::this_thread::sleep_for(1s);
-		}
-		done.store(true);
 
 		auto producer1_id = producer1.get();
 		auto producer2_id = producer2.get();
@@ -1225,8 +1251,8 @@ namespace
 		// check that all the numbers from in are now in out
 		EXPECT_EQ(odds.size(), 0);
 		EXPECT_EQ(evens.size(), 0);
-		EXPECT_GT(out1.size(), 0);
-		EXPECT_GT(out2.size(), 0);
+		EXPECT_EQ(out1.size(), 100);
+		EXPECT_EQ(out2.size(), 100);
 		EXPECT_EQ(out1.size() + out2.size(), 200);
 
 		std::deque<int> full_output;

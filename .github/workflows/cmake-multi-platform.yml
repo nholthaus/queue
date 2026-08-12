@@ -2,20 +2,16 @@ name: CMake on multiple platforms
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [master]
   pull_request:
-    branches: [ "master" ]
+    branches: [master]
 
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        build_type: [Release]
-        c_compiler: [gcc, clang, cl]
         include:
           - os: windows-latest
             c_compiler: cl
@@ -26,49 +22,56 @@ jobs:
           - os: ubuntu-latest
             c_compiler: clang
             cpp_compiler: clang++
-        exclude:
-          - os: windows-latest
-            c_compiler: gcc
-          - os: windows-latest
-            c_compiler: clang
-          - os: ubuntu-latest
-            c_compiler: cl
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set reusable strings
-        id: strings
-        shell: bash
-        run: |
-          echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
-
-      - name: Install Doxygen on Ubuntu
-        if: matrix.os == 'ubuntu-latest' && matrix.c_compiler == 'gcc'
-        run: sudo apt-get update && sudo apt-get install -y doxygen texlive-latex-base texlive-fonts-recommended texlive-fonts-extra texlive-latex-extra
-
       - name: Configure CMake
         run: >
-          cmake -B ${{ steps.strings.outputs.build-output-dir }}
+          cmake -B ${{ github.workspace }}/build
           -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
           -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DCMAKE_BUILD_TYPE=Release
+          -DQUEUE_BUILD_DOCUMENTATION=OFF
           -S ${{ github.workspace }}
 
       - name: Build
-        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+        run: cmake --build ${{ github.workspace }}/build --config Release --parallel
 
       - name: Test
-        working-directory: ${{ steps.strings.outputs.build-output-dir }}
-        run: ctest --build-config ${{ matrix.build_type }}
+        run: ctest --test-dir ${{ github.workspace }}/build --build-config Release --output-on-failure
 
-      - name: Generate Documentation
-        if: matrix.os == 'ubuntu-latest' && matrix.c_compiler == 'gcc'
-        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --target queue_documentation
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Upload Artifacts
-        if: matrix.os == 'ubuntu-latest' && matrix.c_compiler == 'gcc'
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          path: ${{ steps.strings.outputs.build-output-dir }}/doc/latex/*.pdf
+      - name: Install gcovr
+        run: python -m pip install gcovr
+
+      - name: Configure coverage build
+        run: >
+          cmake -B ${{ github.workspace }}/build-coverage
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS=--coverage
+          -DQUEUE_BUILD_DOCUMENTATION=OFF
+          -S ${{ github.workspace }}
+
+      - name: Build and test
+        run: |
+          cmake --build ${{ github.workspace }}/build-coverage --parallel
+          ctest --test-dir ${{ github.workspace }}/build-coverage --output-on-failure
+
+      - name: Enforce coverage
+        run: >
+          gcovr
+          --root ${{ github.workspace }}
+          --filter '${{ github.workspace }}/include/'
+          --exclude-unreachable-branches
+          --exclude-throw-branches
+          --exclude-branches-by-pattern '.*assert\(.*'
+          --fail-under-line 87
+          --fail-under-branch 80
+          --fail-under-function 96
+          --print-summary
+          ${{ github.workspace }}/build-coverage

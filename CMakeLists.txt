@@ -10,7 +10,9 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 #-------------------------------------------------------------------------------
 
 project(queue CXX)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 string(TOUPPER ${PROJECT_NAME} PROJECT_NAME_UPPER)
 set(PROJECT_DESCRIPTION "A C++${CMAKE_CXX_STANDARD} library of various `${PROJECT_NAME}` containers")
 set(PROJECT_VERSION ${GIT_TAG})

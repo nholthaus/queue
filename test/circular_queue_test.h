@@ -879,6 +879,17 @@ namespace
 		EXPECT_EQ(1, test_object::getstringfunctioncalls());
 	}
 
+	TEST_F(circular_queue_test, SelfAssignment)
+	{
+		circular_queue<int> queue{1, 2, 3};
+
+		queue = queue;
+		EXPECT_EQ(std::vector<int>(queue.begin(), queue.end()), (std::vector<int>{1, 2, 3}));
+
+		queue = std::move(queue);
+		EXPECT_EQ(std::vector<int>(queue.begin(), queue.end()), (std::vector<int>{1, 2, 3}));
+	}
+
 	// Tests that the range constructor can build a queue based off of iterators from another container
 	TEST_F(circular_queue_test, RangeAssign)
 	{
@@ -1294,6 +1305,55 @@ namespace
 		EXPECT_EQ(0, test_object::getcopyassignmentcalls());
 		EXPECT_EQ(0, test_object::gettestfunctioncalls());
 		EXPECT_EQ(16, test_object::getstringfunctioncalls());
+	}
+
+	TEST_F(circular_queue_test, ReserveDoesNotShrinkCapacity)
+	{
+		circular_queue<int> queue(8);
+		queue.push_back(1);
+		queue.push_back(2);
+
+		queue.reserve(4);
+
+		EXPECT_EQ(queue.capacity(), 8);
+		EXPECT_EQ(std::vector<int>(queue.begin(), queue.end()), (std::vector<int>{1, 2}));
+	}
+
+	TEST_F(circular_queue_test, ShrinkEmptyQueuePreservesUsableStorage)
+	{
+		circular_queue<int> queue(8);
+		queue.shrink_to_fit();
+		queue.push_back(42);
+
+		EXPECT_EQ(queue.size(), 1);
+		EXPECT_EQ(queue.front(), 42);
+	}
+
+	TEST_F(circular_queue_test, BoundaryModifierBranches)
+	{
+		circular_queue<int> queue(4);
+		int one = 1;
+		queue.push_front(one);
+		queue.push_front(2);
+		queue.push_back(one);
+		queue.push_back(4);
+		EXPECT_TRUE(queue.full());
+
+		queue.push_front(one);
+		queue.push_front(0);
+		queue.push_back(one);
+		queue.push_back(5);
+
+		queue.insert(queue.begin(), circular_queue<int>::size_type{8}, 7);
+		EXPECT_EQ(queue.size(), queue.capacity());
+
+		std::vector<int> values{1, 2, 3, 4, 5, 6};
+		queue.insert(queue.end(), values.begin(), values.end());
+		EXPECT_EQ(std::vector<int>(queue.begin(), queue.end()), (std::vector<int>{3, 4, 5, 6}));
+
+		queue.erase(queue.end() - 1);
+		queue.erase(queue.begin(), queue.begin() + 2);
+		EXPECT_EQ(queue.size(), 1);
 	}
 
 	// Tests the shrink_to_fit function
