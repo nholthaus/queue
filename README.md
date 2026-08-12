@@ -1,10 +1,15 @@
-![Build Status](https://github.com/nholthaus/queue/actions/workflows/cmake-multi-platform.yml/badge.svg) ![language](https://img.shields.io/badge/language-c++20-blue.svg) ![license](https://img.shields.io/badge/license-MIT-orange.svg) ![copyright](https://img.shields.io/badge/%C2%A9-Nic_Holthaus-orange.svg) ![msvc2022](https://img.shields.io/badge/MSVC-2022-ff69b4.svg) ![gcc-11.4.0](https://img.shields.io/badge/GCC-11.4.0-ff69b4.svg)
+![Build Status](https://github.com/nholthaus/queue/actions/workflows/cmake-multi-platform.yml/badge.svg) ![language](https://img.shields.io/badge/language-c++23-blue.svg) ![license](https://img.shields.io/badge/license-MIT-orange.svg) ![copyright](https://img.shields.io/badge/%C2%A9-Nic_Holthaus-orange.svg) ![msvc2022](https://img.shields.io/badge/MSVC-2022-ff69b4.svg) ![gcc-13](https://img.shields.io/badge/GCC-13-ff69b4.svg) ![clang-18](https://img.shields.io/badge/Clang-18-ff69b4.svg)
 
 A modern C++ header-only library of various types of queue
+
+- `concurrent_queue` provides synchronized FIFO access for multiple producers and consumers. In addition to `push` and `emplace`, consumers can use non-blocking `try_pop` or bounded-wait `try_pop_for` operations.
+- `circular_queue` is an allocator-aware, fixed-capacity contiguous container with random-access iterators. When full, insertion overwrites the oldest element at the opposite end.
 
 # Table of Contents
 
 - [Table of Contents](#table-of-contents)
+- [Compatibility](#compatibility)
+- [Release 1.2.0](#release-120)
 - [Build Instructions](#build-instructions)
 - [Usage](#usage)
   - [Concurrent Queue](#concurrent-queue)
@@ -12,24 +17,48 @@ A modern C++ header-only library of various types of queue
   - [Circular Queue](#circular-queue)
     - [Example](#example-1)
 
+# Compatibility
+
+Release 1.2.0 requires C++23. The versions below are the minimum compiler baselines exercised by each release's CI or explicitly documented by that release; newer compiler releases are expected to work as well.
+
+| Release | Language standard | Minimum tested compilers | Minimum CMake |
+| --- | --- | --- | --- |
+| 1.2.0 | C++23 | GCC 13, Clang 18, MSVC 2022 | 3.25 |
+| 1.1.x | C++20 | GCC 11.4, Clang 14, MSVC 2022 | 3.7 |
+| 1.0.x | C++17 | GCC 9.3, MSVC 2019 | 3.7 |
+
+Compiler versions not listed for an older release were not pinned by that release's build configuration and are therefore not part of its documented compatibility baseline. Other compilers may work, but are not supported unless covered by CI.
+
+# Release 1.2.0
+
+The 1.2.0 release moves the library to C++23 and adds range-aware construction, `assign_range`, and `insert_range` to `circular_queue`. Both queue types support three-way comparison when their stored types and underlying containers support it. This release also expands the GCC, Clang, and MSVC CI matrix with coverage and sanitizer builds.
+
 # Build Instructions
 
 Each class in the library itself is a single header only. You can use the included CMake in a subdirectory and add the interface library, or just copy the `*.h` files (and license) into your project.
 
+Building the repository requires CMake 3.25 or newer and a C++23 compiler from the 1.2.0 compatibility row above. The queue headers themselves have no third-party runtime dependency. Tests require a thread library and GoogleTest 1.17 (fetched automatically when it is not installed); documentation generation requires Doxygen, with `pdflatex` needed only for the optional PDF.
+
+When the repository is included with `add_subdirectory`, link the header-only interface target to inherit its include path:
+
+``` cmake
+add_subdirectory(queue)
+target_link_libraries(my_target PRIVATE queue)
+```
+
 To build and run the unit tests:
 
 ``` bash
-mkdir build
-cd build
-cmake -DBUILD_TESTS=ON ..
-cmake --build . --config Release
-ctest
+cmake -S . -B build -DQUEUE_BUILD_TESTS=ON -DQUEUE_BUILD_DOCUMENTATION=OFF
+cmake --build build --config Release
+ctest --test-dir build --build-config Release --output-on-failure
 ```
 
-To build the documentation, replace the above `cmake` command with the following:
+To configure and build the generated documentation:
 
-```
-cmake -DBUILD_TESTS=ON -DBUILD_DOCUMENTATION=ON ..
+``` bash
+cmake -S . -B build -DQUEUE_BUILD_TESTS=OFF -DQUEUE_BUILD_DOCUMENTATION=ON
+cmake --build build --target queue_documentation
 ```
 
 # Usage

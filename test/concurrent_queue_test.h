@@ -1262,12 +1262,14 @@ namespace
 			                           return std::this_thread::get_id(); });
 		auto consumer = std::async(std::launch::async, [&queue, &numbers_out, test_size, &iteration]
 		                           {
-			                           int val;
+			                           int val = 0;
 			                           for (int i = 0; i < test_size; ++i)
 			                           {
 				                           iteration.arrive_and_wait();
-				                           EXPECT_TRUE(queue.try_pop_for(val, 100ms));
-				                           numbers_out.push_back(val);
+				                           if (queue.try_pop_for(val, 1s))
+					                           numbers_out.push_back(val);
+				                           else
+					                           ADD_FAILURE() << "timed out waiting for item " << i;
 				                           iteration.arrive_and_wait();
 			                           }
 			                           return std::this_thread::get_id(); });
@@ -1335,23 +1337,27 @@ namespace
 			                            return std::this_thread::get_id(); });
 		auto consumer1 = std::async(std::launch::async, [&queue, &out1, &iteration]
 		                            {
-			                            int val;
+			                            int val = 0;
 			                            for (int i = 0; i < 100; ++i)
 			                            {
 				                            iteration.arrive_and_wait();
-				                            EXPECT_TRUE(queue.try_pop_for(val, 100ms));
-				                            out1.push_back(val);
+				                            if (queue.try_pop_for(val, 1s))
+					                            out1.push_back(val);
+				                            else
+					                            ADD_FAILURE() << "consumer 1 timed out on iteration " << i;
 				                            iteration.arrive_and_wait();
 			                            }
 			                            return std::this_thread::get_id(); });
 		auto consumer2 = std::async(std::launch::async, [&queue, &out2, &iteration]
 		                            {
-			                            int val;
+			                            int val = 0;
 			                            for (int i = 0; i < 100; ++i)
 			                            {
 				                            iteration.arrive_and_wait();
-				                            EXPECT_TRUE(queue.try_pop_for(val, 100ms));
-				                            out2.push_back(val);
+				                            if (queue.try_pop_for(val, 1s))
+					                            out2.push_back(val);
+				                            else
+					                            ADD_FAILURE() << "consumer 2 timed out on iteration " << i;
 				                            iteration.arrive_and_wait();
 			                            }
 			                            return std::this_thread::get_id(); });
