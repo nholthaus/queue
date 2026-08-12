@@ -2,7 +2,7 @@
 #	CMAKE SETTINGS
 #-------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.7)
+cmake_minimum_required(VERSION 3.25)
 
 #-------------------------------------------------------------------------------
 #	PROJECT SETTINGS
@@ -14,8 +14,26 @@ PROJECT(queueTest CXX)
 #	3rd Party
 #-------------------------------------------------------------------------------
 
+include(FetchContent)
+
+# Use an installed GTest >= 1.17 if available.
 find_package(Threads)
-add_subdirectory(googletest-1.14.0)
+find_package(GTest 1.17 CONFIG QUIET)
+
+if(NOT GTest_FOUND)
+    FetchContent_Declare(
+            googletest
+            URL https://github.com/google/googletest/archive/refs/tags/v1.17.0.tar.gz
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+
+    # Keep GTest's MSVC runtime consistent with the parent project.
+    if(MSVC)
+        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    endif()
+
+    FetchContent_MakeAvailable(googletest)
+endif()
 
 #-------------------------------------------------------------------------------
 #	SOURCE CODE

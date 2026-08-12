@@ -21,7 +21,6 @@ else ()
 		add_custom_command(TARGET ${PROJECT_NAME}_documentation
 		                   POST_BUILD
 		                   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/doc/latex/
-		                   DEPENDS ${TEX_FILE}
 		                   COMMAND ${PDF_PROGRAM} -quiet -job-name=${PROJECT_NAME}-${PROJECT_VERSION} ${TEX_FILE}
 		                   COMMENT "Generating documentation PDF..."
 		                   )
