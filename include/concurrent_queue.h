@@ -59,6 +59,7 @@
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
+#include <stop_token>
 #include <type_traits>
 #include <utility>
 
@@ -416,6 +417,20 @@ public:
 		}
 
 		// At this point the queue is not empty
+		destination = std::move(queue.front());
+		queue.pop_front();
+		return true;
+	}
+
+	/// @brief Block until an item is available or stop is requested, then pop one item.
+	/// @details If stop and queued data arrive together, queued data wins. Repeated calls therefore drain everything
+	///          accepted before shutdown and return false once the queue is empty and the token is stopped.
+	bool wait_pop(T& destination, std::stop_token stop)
+	{
+		write_lock_type lock_this(this->mutex);
+		if (!new_element.wait(lock_this, stop, [this] { return !queue.empty(); }))
+			return false;
+
 		destination = std::move(queue.front());
 		queue.pop_front();
 		return true;
