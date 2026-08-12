@@ -1,0 +1,17 @@
+stages:
+  - deploy
+
+deploy-documentation:
+  stage: deploy
+  image: ubuntu:24.04
+  before_script:
+    - apt-get update
+    - apt-get install --yes --no-install-recommends cmake doxygen git graphviz
+  script:
+    - cmake -S . -B build -DQUEUE_BUILD_TESTS=OFF -DQUEUE_BUILD_DOCUMENTATION=ON
+    - cmake --build build --target queue_documentation --parallel
+    - test -s build/doc/html/index.html
+  pages:
+    publish: build/doc/html
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'

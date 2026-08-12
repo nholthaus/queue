@@ -61,6 +61,8 @@ cmake -S . -B build -DQUEUE_BUILD_TESTS=OFF -DQUEUE_BUILD_DOCUMENTATION=ON
 cmake --build build --target queue_documentation
 ```
 
+When the repository is hosted on GitLab, the default-branch pipeline also builds the Doxygen HTML and deploys it with GitLab Pages. After the first successful pipeline, the site URL is available under **Deploy > Pages** in the GitLab project.
+
 # Usage
 
 ## Concurrent Queue
