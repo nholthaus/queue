@@ -46,8 +46,11 @@
 //------------------------
 #include <algorithm>
 #include <cassert>
+#include <compare>
+#include <concepts>
 #include <initializer_list>
 #include <iterator>
+#include <ranges>
 #include <stdexcept>
 #include <type_traits>
 
@@ -633,6 +636,8 @@ public:
         *					exceptions.\n
         * @param[in]	buffer pointer to the underlying container.
         * @param[in]	start pointer to the iterator's starting offset
+		* @param[in]	parity parity bit associated with the pointer. This function modifies the value
+		*				of parity.
         */
 		iterator(const circular_queue* const buffer, pointer start, bool parity) noexcept
 		    : m_buffer(buffer)
@@ -1171,14 +1176,14 @@ public:
      * @param[in]	alloc Allocator object. The container keeps and uses an internal copy of this
      *				allocator.
      */
-	template<class InputIterator>
-	explicit circular_queue(InputIterator first, InputIterator last, const allocator_type& alloc = allocator_type(), std::enable_if_t<!std::is_integral_v<InputIterator>>* = nullptr)
+	template<std::forward_iterator InputIterator, std::sentinel_for<InputIterator> Sentinel>
+	explicit circular_queue(InputIterator first, Sentinel last, const allocator_type& alloc = allocator_type())
 	    : m_alloc(alloc)
-	    , m_capacity(last - first)
+	    , m_capacity(static_cast<size_type>(std::ranges::distance(first, last)))
 	    , m_head(nullptr, false)
 	    , m_tail(nullptr, false)
 	{
-		static_assert(std::is_convertible<value_type, typename std::iterator_traits<InputIterator>::value_type>::value,
+		static_assert(std::is_convertible_v<typename std::iterator_traits<InputIterator>::value_type, value_type>,
 		              "InputIterator::value_type is not compatible with this container's value_type");
 
 		if (m_capacity == 0)
@@ -1215,6 +1220,13 @@ public:
 			this->~circular_queue();
 			throw;
 		}
+	}
+
+	template<std::ranges::forward_range Range>
+	    requires std::convertible_to<std::ranges::range_value_t<Range>, value_type>
+	explicit circular_queue(Range&& range, const allocator_type& alloc = allocator_type())
+	    : circular_queue(std::ranges::begin(range), std::ranges::end(range), alloc)
+	{
 	}
 
 	/**
@@ -1285,22 +1297,27 @@ public:
 	circular_queue(const circular_queue& other)
 	    : m_alloc(std::allocator_traits<decltype(other.m_alloc)>::select_on_container_copy_construction(other.m_alloc))
 	    , m_capacity(other.m_capacity)
-	    , m_head(other.m_head)
-	    , m_tail(other.m_tail)
+	    , m_head(nullptr, false)
+	    , m_tail(nullptr, false)
 	{
+		if (m_capacity == 0) return;
+
 		// allocate raw memory near this class. No point in default constructing anything, especially since this buffer
 		// may be HUGE.
 		m_data = std::allocator_traits<Alloc>::allocate(m_alloc, m_capacity, this);
 
-		// correct head/tail pointers
-		m_head.ptr = m_data + (other.m_head.ptr - other.m_data);
-		m_tail.ptr = m_data + (other.m_tail.ptr - other.m_data);
+		m_head.ptr = m_tail.ptr = m_data;
 
-		// Deep copy the other data - need to copy construct each individual element. No memcpy!!
-		for (const_iterator itr = this->begin(), otherItr = other.begin(); otherItr != other.end(); ++itr, ++otherItr)
+		try
 		{
-			// copy construct
-			std::allocator_traits<Alloc>::construct(m_alloc, const_cast<pointer>(&itr), *otherItr);
+			for (const auto& value : other) emplace_back(value);
+		}
+		catch (...)
+		{
+			clear();
+			std::allocator_traits<Alloc>::deallocate(m_alloc, m_data, m_capacity);
+			m_data = nullptr;
+			throw;
 		}
 	}
 
@@ -1315,7 +1332,7 @@ public:
      *					exceptions.\n
      * @param[in]	other circular_queue to be moved.
      */
-	circular_queue(circular_queue&& other) noexcept
+	circular_queue(circular_queue&& other) noexcept(std::is_nothrow_move_constructible_v<allocator_type>)
 	    : m_alloc(std::move(other.m_alloc))
 	    , m_capacity(other.m_capacity)
 	    , m_head(std::move(other.m_head))
@@ -1392,37 +1409,51 @@ public:
 		if (this == &other)
 			return *this;
 
-		// Destroy and deallocate the current storage without ending this object's lifetime.
+		using traits               = std::allocator_traits<allocator_type>;
+		allocator_type targetAlloc = m_alloc;
+		if constexpr (traits::propagate_on_container_copy_assignment::value) targetAlloc = other.m_alloc;
+
+		pointer newData = nullptr;
+		pointer newEnd  = nullptr;
+		if (other.m_capacity != 0)
+		{
+			newData = traits::allocate(targetAlloc, other.m_capacity, this);
+			newEnd  = newData;
+			try
+			{
+				for (const auto& value : other)
+				{
+					traits::construct(targetAlloc, newEnd, value);
+					++newEnd;
+				}
+			}
+			catch (...)
+			{
+				while (newEnd != newData) traits::destroy(targetAlloc, --newEnd);
+				traits::deallocate(targetAlloc, newData, other.m_capacity);
+				throw;
+			}
+		}
+
 		clear();
-		if (m_data != nullptr)
-			std::allocator_traits<Alloc>::deallocate(m_alloc, m_data, m_capacity);
+		if (m_data != nullptr) traits::deallocate(m_alloc, m_data, m_capacity);
 		m_data = m_head.ptr = m_tail.ptr = nullptr;
-		m_capacity = 0;
+		m_capacity                       = 0;
 		m_head.parity = m_tail.parity = false;
-
-		if (std::allocator_traits<decltype(other.m_alloc)>::propagate_on_container_copy_assignment::value)
+		try
 		{
-			m_alloc = other.m_alloc;
+			if constexpr (traits::propagate_on_container_copy_assignment::value) m_alloc = targetAlloc;
 		}
-
-		m_capacity    = other.m_capacity;
-		m_head.parity = other.m_head.parity;
-		m_tail.parity = other.m_tail.parity;
-
-		// allocate raw memory near this class. No point in default constructing anything, especially since this buffer
-		// may be HUGE.
-		m_data = std::allocator_traits<Alloc>::allocate(m_alloc, m_capacity, this);
-
-		// correct head/tail pointers
-		m_head.ptr = m_data + (other.m_head.ptr - other.m_data);
-		m_tail.ptr = m_data + (other.m_tail.ptr - other.m_data);
-
-		// Deep copy the other data - need to copy construct each individual element. No memcpy!!
-		for (const_iterator itr = this->begin(), otherItr = other.begin(); otherItr != other.end(); ++itr, ++otherItr)
+		catch (...)
 		{
-			// copy construct
-			std::allocator_traits<Alloc>::construct(m_alloc, const_cast<pointer>(&itr), *otherItr);
+			while (newEnd != newData) traits::destroy(targetAlloc, --newEnd);
+			if (newData != nullptr) traits::deallocate(targetAlloc, newData, other.m_capacity);
+			throw;
 		}
+		m_data     = newData;
+		m_capacity = other.m_capacity;
+		m_head     = queue_pointer(newData, false);
+		m_tail     = queue_pointer(newEnd, newData != nullptr && newEnd == newData + m_capacity);
 
 		return *this;
 	}
@@ -1444,20 +1475,51 @@ public:
      * @sa			assign()
      * @returns		*this
      */
-	circular_queue& operator=(circular_queue&& other) noexcept
+	circular_queue& operator=(circular_queue&& other) noexcept(
+	        std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value ? std::is_nothrow_move_assignable_v<allocator_type> : std::allocator_traits<allocator_type>::is_always_equal::value)
 	{
 		if (this == &other)
 			return *this;
 
-		// Destroy and deallocate the current storage without ending this object's lifetime.
+		using traits = std::allocator_traits<allocator_type>;
+		if constexpr (!traits::propagate_on_container_move_assignment::value)
+		{
+			if (m_alloc != other.m_alloc)
+			{
+				if (other.m_capacity == 0)
+				{
+					clear();
+					if (m_data != nullptr) traits::deallocate(m_alloc, m_data, m_capacity);
+					m_data     = nullptr;
+					m_capacity = 0;
+					m_head = m_tail = queue_pointer(nullptr, false);
+					return *this;
+				}
+				circular_queue replacement(other.m_capacity, m_alloc);
+				for (auto& value : other) replacement.emplace_back(std::move(value));
+				other.clear();
+				clear();
+				if (m_data != nullptr) traits::deallocate(m_alloc, m_data, m_capacity);
+				m_data                 = replacement.m_data;
+				m_capacity             = replacement.m_capacity;
+				m_head                 = replacement.m_head;
+				m_tail                 = replacement.m_tail;
+				replacement.m_data     = nullptr;
+				replacement.m_capacity = 0;
+				replacement.m_head = replacement.m_tail = queue_pointer(nullptr, false);
+				return *this;
+			}
+		}
+
+		// Equal or propagated allocators retain the constant-time storage-steal path.
 		clear();
 		if (m_data != nullptr)
 			std::allocator_traits<Alloc>::deallocate(m_alloc, m_data, m_capacity);
 		m_data = m_head.ptr = m_tail.ptr = nullptr;
-		m_capacity = 0;
+		m_capacity                       = 0;
 		m_head.parity = m_tail.parity = false;
 
-		if (std::allocator_traits<decltype(other.m_alloc)>::propagate_on_container_move_assignment::value)
+		if constexpr (traits::propagate_on_container_move_assignment::value)
 		{
 			m_alloc = std::move(other.m_alloc);
 		}
@@ -1526,14 +1588,14 @@ public:
      */
 	reference operator[](size_type n)
 	{
-		assert(n < m_capacity);
+		assert(n < size());
 		return *(m_data + ((m_head.ptr - m_data + n) % m_capacity));
 	}
 
 	/// @overload
 	const_reference operator[](size_type n) const
 	{
-		assert(n < m_capacity);
+		assert(n < size());
 		return *(m_data + ((m_head.ptr - m_data + n) % m_capacity));
 	}
 
@@ -2109,14 +2171,14 @@ public:
      * @param[in]	last end (exclusive) of the range to be copied.
      * @sa			operator=
      */
-	template<class InputIterator>
-	void assign(InputIterator first, InputIterator last)
+	template<std::forward_iterator InputIterator, std::sentinel_for<InputIterator> Sentinel>
+	void assign(InputIterator first, Sentinel last)
 	{
-		static_assert(std::is_convertible_v<value_type, typename std::iterator_traits<InputIterator>::value_type>,
+		static_assert(std::is_convertible_v<typename std::iterator_traits<InputIterator>::value_type, value_type>,
 		              "InputIterator::value_type is not compatible with this container's value_type");
 
 		// check that there is a valid range
-		const difference_type distance = last - first;
+		const difference_type distance = std::ranges::distance(first, last);
 		if (distance == 0)
 		{
 			throw std::length_error("Cannot assign capacity of 0");
@@ -2125,7 +2187,7 @@ public:
 		clear();
 		std::allocator_traits<Alloc>::deallocate(m_alloc, m_data, m_capacity);
 		m_capacity = static_cast<size_type>(distance);
-		m_data = nullptr;
+		m_data     = nullptr;
 		try
 		{
 			m_data = std::allocator_traits<Alloc>::allocate(m_alloc, m_capacity, this);
@@ -2147,6 +2209,12 @@ public:
 			clear();
 			throw;
 		}
+	}
+
+	template<std::ranges::forward_range Range>
+	void assign_range(Range&& range)
+	{
+		assign(std::ranges::begin(range), std::ranges::end(range));
 	}
 
 	/**
@@ -2177,7 +2245,7 @@ public:
 		clear();
 		std::allocator_traits<Alloc>::deallocate(m_alloc, m_data, m_capacity);
 		m_capacity = n;
-		m_data = nullptr;
+		m_data     = nullptr;
 		try
 		{
 			m_data = std::allocator_traits<Alloc>::allocate(m_alloc, m_capacity, this);
@@ -2619,27 +2687,24 @@ public:
      * @sa			push_front()
      * @returns		An iterator that points to the first of the newly inserted elements.
      */
-	template<class InputIterator>
-	iterator insert(const_iterator position, InputIterator first, InputIterator last)
+	template<std::forward_iterator InputIterator, std::sentinel_for<InputIterator> Sentinel>
+	iterator insert(const_iterator position, InputIterator first, Sentinel last)
 	{
-		static_assert(std::is_base_of_v<std::forward_iterator_tag, typename std::iterator_traits<InputIterator>::iterator_category>,
-		              "Insert (range) requires InputIterator to be at least a forward iterator.");
-
 		static_assert(std::is_convertible_v<typename std::iterator_traits<InputIterator>::value_type, value_type>,
 		              "InputIterator::value_type is not implicitly convertible to circular_queue::value_type.");
 
 		assert(position.m_buffer == this);
 
-		size_type n = last - first;
+		const auto n = static_cast<size_type>(std::ranges::distance(first, last));
 
 		InputIterator start = first;
 		if (n > capacity())
 		{
-			start = last - capacity();
+			std::ranges::advance(start, static_cast<difference_type>(n - capacity()));
 		}
 
 		// increase size of container by n
-		for (InputIterator i = std::move(start); i < last; ++i)
+		for (InputIterator i = std::move(start); i != last; ++i)
 		{
 			push_back(*i);    // this can change begin()
 		}
@@ -2649,6 +2714,12 @@ public:
 
 		// swap the new elements down to the position we're supposed to insert it at
 		return swapDownTo(position, n);
+	}
+
+	template<std::ranges::forward_range Range>
+	iterator insert_range(const_iterator position, Range&& range)
+	{
+		return insert(position, std::ranges::begin(range), std::ranges::end(range));
 	}
 
 	/**
@@ -2783,13 +2854,13 @@ public:
      *				undefined behavior.\n
      * @param[in]	other container to swap with <i>this</i>.
      */
-	void swap(circular_queue& other) noexcept
+	void swap(circular_queue& other) noexcept(
+	        !std::allocator_traits<allocator_type>::propagate_on_container_swap::value || std::is_nothrow_swappable_v<allocator_type>)
 	{
-		if (std::allocator_traits<decltype(other.m_alloc)>::propagate_on_container_swap::value)
+		if constexpr (std::allocator_traits<allocator_type>::propagate_on_container_swap::value)
 		{
-			allocator_type temp = this->m_alloc;
-			this->m_alloc       = other.m_alloc;
-			other.m_alloc       = temp;
+			using std::swap;
+			swap(this->m_alloc, other.m_alloc);
 		}
 
 		auto tempData = this->m_data;
@@ -2807,6 +2878,18 @@ public:
 		auto tempTail = this->m_tail;
 		this->m_tail  = other.m_tail;
 		other.m_tail  = tempTail;
+	}
+
+	friend bool operator==(const circular_queue& lhs, const circular_queue& rhs)
+	    requires std::equality_comparable<value_type>
+	{
+		return std::ranges::equal(lhs, rhs);
+	}
+
+	friend auto operator<=>(const circular_queue& lhs, const circular_queue& rhs)
+	    requires std::three_way_comparable<value_type>
+	{
+		return std::lexicographical_compare_three_way(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), std::compare_three_way{});
 	}
 
 	/**
@@ -3071,8 +3154,6 @@ protected:
     * @details		Takes care of wrapping the pointer and keeping parity consistent.
     * @param[in]	p pointer to decrement. This function modifies the value of p.
     * @param[in]	n number of elements to increment the pointer
-    * @param[in]	parity parity bit associated with the pointer. This function modifies the value
-    *				of parity.
     */
 	inline queue_pointer decrement(queue_pointer p, difference_type n) const noexcept
 	{
@@ -3155,8 +3236,9 @@ protected:
 		}
 		catch (...)
 		{
-			// increment head past the thing that blew up
-			m_head = increment(m_head, 1);
+			// The throwing source element is still alive, but may be moved-from. Discard it
+			// through the normal lifetime path so the remaining queue stays valid.
+			pop_front();
 
 			// free the new data area
 			pointer newDataDestroyer = newData;

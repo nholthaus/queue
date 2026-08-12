@@ -17,13 +17,14 @@ PROJECT(queueTest CXX)
 include(FetchContent)
 
 # Use an installed GTest >= 1.17 if available.
-find_package(Threads)
+find_package(Threads REQUIRED)
 find_package(GTest 1.17 CONFIG QUIET)
 
 if(NOT GTest_FOUND)
     FetchContent_Declare(
             googletest
             URL https://github.com/google/googletest/archive/refs/tags/v1.17.0.tar.gz
+            URL_HASH SHA256=65fab701d9829d38cb77c14acdc431d2108bfdbf8979e40eb8ae567edf10b27c
             DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
 
@@ -67,6 +68,7 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 list(APPEND LIBRARIES
         gtest
         queue
+        Threads::Threads
     )
 
 # Remove duplicate library dependencies.

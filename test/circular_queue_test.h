@@ -7,11 +7,69 @@
 #include <chrono>
 #include <deque>
 #include <memory>
+#include <list>
 #include <type_traits>
+#include <unordered_map>
 #include <vector>
 
 namespace
 {
+	struct hostile_value
+	{
+		inline static int alive = 0;
+		inline static int copies_before_throw = -1;
+		inline static int moves_before_throw = -1;
+
+		int value = 0;
+		explicit hostile_value(int v = 0) : value(v) { ++alive; }
+		hostile_value(const hostile_value& other) : value(other.value)
+		{
+			if (copies_before_throw == 0) throw std::runtime_error("copy");
+			if (copies_before_throw > 0) --copies_before_throw;
+			++alive;
+		}
+		hostile_value(hostile_value&& other) : value(other.value)
+		{
+			if (moves_before_throw == 0) throw std::runtime_error("move");
+			if (moves_before_throw > 0) --moves_before_throw;
+			other.value = -1;
+			++alive;
+		}
+		hostile_value& operator=(const hostile_value&) = default;
+		hostile_value& operator=(hostile_value&&) = default;
+		~hostile_value() { --alive; }
+	};
+
+	template<class T>
+	struct hostile_allocator
+	{
+		using value_type = T;
+		using propagate_on_container_move_assignment = std::false_type;
+		using propagate_on_container_swap = std::false_type;
+		using is_always_equal = std::false_type;
+
+		inline static std::unordered_map<void*, int> owners;
+		inline static bool wrong_deallocation = false;
+		int id = 0;
+
+		explicit hostile_allocator(int value = 0) noexcept : id(value) {}
+		template<class U> hostile_allocator(const hostile_allocator<U>& other) noexcept : id(other.id) {}
+		T* allocate(std::size_t n)
+		{
+			T* result = std::allocator<T>{}.allocate(n);
+			owners[result] = id;
+			return result;
+		}
+		void deallocate(T* ptr, std::size_t n) noexcept
+		{
+			auto found = owners.find(ptr);
+			if (found == owners.end() || found->second != id) wrong_deallocation = true;
+			else owners.erase(found);
+			std::allocator<T>{}.deallocate(ptr, n);
+		}
+		template<class U> bool operator==(const hostile_allocator<U>& other) const noexcept { return id == other.id; }
+		template<class U> bool operator!=(const hostile_allocator<U>& other) const noexcept { return !(*this == other); }
+	};
 
 	/// Wrapper class for checking out the private data members of the queue for test purposes
 	class circular_queue_test_wrapper : public circular_queue<test_object>
@@ -1297,7 +1355,7 @@ namespace
 
 		// check for leaks or extraneous object creation
 		EXPECT_EQ(13, test_object::getconstructorcalls());
-		EXPECT_EQ(20, test_object::getdestructorcalls());
+		EXPECT_EQ(21, test_object::getdestructorcalls());
 		EXPECT_EQ(0, test_object::getdefaultconstructorcalls());
 		EXPECT_EQ(8, test_object::getmoveconstructorcalls());
 		EXPECT_EQ(0, test_object::getcopyconstructorcalls());
@@ -4808,6 +4866,105 @@ namespace
 		EXPECT_TRUE(citr >= partialOverflowBuffer->end());
 		EXPECT_TRUE(citr == partialOverflowBuffer->end());
 		EXPECT_FALSE(citr != partialOverflowBuffer->end());
+	}
+
+	TEST_F(circular_queue_test, ForwardIteratorRanges)
+	{
+		std::list<int> values{1, 2, 3, 4};
+		circular_queue<int> queue(values.begin(), values.end());
+		EXPECT_EQ(std::vector<int>({1, 2, 3, 4}), std::vector<int>(queue.begin(), queue.end()));
+
+		std::list<int> assigned{5, 6, 7};
+		queue.assign(assigned.begin(), assigned.end());
+		EXPECT_EQ(std::vector<int>({5, 6, 7}), std::vector<int>(queue.begin(), queue.end()));
+
+		std::list<int> inserted{8, 9};
+		queue.insert(queue.begin() + 1, inserted.begin(), inserted.end());
+		EXPECT_EQ(std::vector<int>({8, 9, 7}), std::vector<int>(queue.begin(), queue.end()));
+
+		circular_queue<int> rangeQueue(values);
+		rangeQueue.assign_range(assigned);
+		rangeQueue.insert_range(rangeQueue.begin() + 1, inserted);
+		EXPECT_EQ(std::vector<int>({8, 9, 7}), std::vector<int>(rangeQueue.begin(), rangeQueue.end()));
+	}
+
+	TEST_F(circular_queue_test, ThreeWayComparison)
+	{
+		circular_queue<int> a{1, 2};
+		circular_queue<int> b{1, 3};
+		circular_queue<int> c{1, 2};
+		EXPECT_LT(a, b);
+		EXPECT_GT(b, a);
+		EXPECT_EQ(a, c);
+	}
+
+	TEST_F(circular_queue_test, CopyFailuresCleanUpAndPreserveAssignmentTarget)
+	{
+		hostile_value::alive = 0;
+		hostile_value::copies_before_throw = -1;
+		{
+			circular_queue<hostile_value> source(4);
+			source.emplace_back(1);
+			source.emplace_back(2);
+			source.emplace_back(3);
+			const int sourceAlive = hostile_value::alive;
+
+			hostile_value::copies_before_throw = 1;
+			EXPECT_THROW((circular_queue<hostile_value>(source)), std::bad_alloc);
+			EXPECT_EQ(sourceAlive, hostile_value::alive);
+
+			circular_queue<hostile_value> target(2);
+			target.emplace_back(99);
+			hostile_value::copies_before_throw = 1;
+			EXPECT_THROW(target = source, std::runtime_error);
+			ASSERT_EQ(1u, target.size());
+			EXPECT_EQ(99, target.front().value);
+		}
+		EXPECT_EQ(0, hostile_value::alive);
+	}
+
+	TEST_F(circular_queue_test, ReallocateMoveFailureDoesNotLoseLiveElement)
+	{
+		hostile_value::alive = 0;
+		hostile_value::moves_before_throw = -1;
+		{
+			circular_queue<hostile_value> queue(3);
+			queue.emplace_back(1);
+			queue.emplace_back(2);
+			queue.emplace_back(3);
+			hostile_value::moves_before_throw = 1;
+			EXPECT_THROW(queue.reserve(6), std::runtime_error);
+			ASSERT_EQ(1u, queue.size());
+			EXPECT_EQ(3, queue.front().value);
+			EXPECT_EQ(3, queue.back().value);
+		}
+		EXPECT_EQ(0, hostile_value::alive);
+	}
+
+	TEST_F(circular_queue_test, UnequalNonPropagatingAllocatorMoveAssignment)
+	{
+		using allocator = hostile_allocator<hostile_value>;
+		allocator::wrong_deallocation = false;
+		allocator::owners.clear();
+		hostile_value::alive = 0;
+		hostile_value::moves_before_throw = -1;
+		{
+			circular_queue<hostile_value, allocator> source(3, allocator(2));
+			source.emplace_back(1);
+			source.emplace_back(2);
+			circular_queue<hostile_value, allocator> target(1, allocator(1));
+			target.emplace_back(9);
+
+			target = std::move(source);
+			EXPECT_EQ(1, target.get_allocator().id);
+			ASSERT_EQ(2u, target.size());
+			EXPECT_EQ(1, target.front().value);
+			EXPECT_EQ(2, target.back().value);
+			EXPECT_TRUE(source.empty());
+		}
+		EXPECT_FALSE(allocator::wrong_deallocation);
+		EXPECT_TRUE(allocator::owners.empty());
+		EXPECT_EQ(0, hostile_value::alive);
 	}
 
 	TEST_F(circular_queue_test, TimeTrial)

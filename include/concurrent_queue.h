@@ -53,11 +53,14 @@
 //----------------------------
 
 #include <chrono>
+#include <compare>
 #include <condition_variable>
 #include <deque>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
+#include <type_traits>
+#include <utility>
 
 //-------------------------
 //	FORWARD DECLARATIONS
@@ -172,7 +175,9 @@ public:
 	/// @details Constructs a container that acquires the elements of `other`. Ownership of the contained elements is directly
 	///          transferred. `other` is left in an unspecified but valid state.
 	/// @param[in] other container to move from
-	concurrent_queue(concurrent_queue&& other) noexcept
+	concurrent_queue(concurrent_queue&& other) noexcept(
+	    std::is_nothrow_constructible_v<write_lock_type, mutex_type&> &&
+	    std::is_nothrow_constructible_v<queue_type, queue_type&&>)
 	    : concurrent_queue(std::move(other), write_lock_type(other.mutex))
 	{
 	}
@@ -182,7 +187,9 @@ public:
 	///          transferred. `other` is left in an unspecified but valid state.
 	/// @param[in] other container to move from
 	/// @param[in] alloc allocator to use for all memory allocations of this container
-	concurrent_queue(concurrent_queue&& other, const allocator_type& alloc) noexcept
+	concurrent_queue(concurrent_queue&& other, const allocator_type& alloc) noexcept(
+	    std::is_nothrow_constructible_v<write_lock_type, mutex_type&> &&
+	    std::is_nothrow_constructible_v<queue_type, queue_type&&, const allocator_type&>)
 	    : concurrent_queue(std::move(other), alloc, write_lock_type(other.mutex))
 	{
 	}
@@ -225,12 +232,14 @@ public:
 		if (this == &other)
 			return *this;
 
-		// acquire appropriate locks on both containers
-		write_lock_type  lock_this(this->mutex, std::defer_lock);
-		read_lock_type   lock_that(other.mutex, std::defer_lock);
-		std::scoped_lock lock(lock_this, lock_that);
+		{
+			// acquire appropriate locks on both containers
+			write_lock_type  lock_this(this->mutex, std::defer_lock);
+			read_lock_type   lock_that(other.mutex, std::defer_lock);
+			std::scoped_lock lock(lock_this, lock_that);
 
-		queue = other.queue;
+			queue = other.queue;
+		}
 		new_element.notify_all();
 		return *this;
 	}
@@ -238,17 +247,21 @@ public:
 	/// @brief Move Assignment Operator
 	/// @param[in] other  concurrent queue whose elements are to be moved.
 	/// @return A reference to this concurrent queue.
-	concurrent_queue& operator=(concurrent_queue&& other) noexcept
+	concurrent_queue& operator=(concurrent_queue&& other) noexcept(
+	    noexcept(std::declval<write_lock_type&>().lock()) &&
+	    std::is_nothrow_assignable_v<queue_type&, queue_type&&>)
 	{
 		if (this == &other)
 			return *this;
 
-		// acquire appropriate locks on both containers
-		write_lock_type  lock_this(this->mutex, std::defer_lock);
-		write_lock_type  lock_that(other.mutex, std::defer_lock);
-		std::scoped_lock lock(lock_this, lock_that);
+		{
+			// acquire appropriate locks on both containers
+			write_lock_type  lock_this(this->mutex, std::defer_lock);
+			write_lock_type  lock_that(other.mutex, std::defer_lock);
+			std::scoped_lock lock(lock_this, lock_that);
 
-		queue = std::move(other.queue);
+			queue = std::move(other.queue);
+		}
 		new_element.notify_all();
 		return *this;
 	}
@@ -568,6 +581,21 @@ public:
 	template<class Ty, template<class, class> class Q, class A>
 	friend bool operator!=(const concurrent_queue<Ty, Q, A>& lhs, const concurrent_queue<Ty, Q, A>& rhs);
 
+	/// @brief Three-way comparison operator
+	/// @return the lexicographical ordering of the queues' elements
+		friend auto operator<=>(const concurrent_queue& lhs, const concurrent_queue& rhs)
+		    requires requires(const queue_type& a, const queue_type& b) { a <=> b; }
+		{
+			if (&lhs == &rhs)
+				return lhs.queue <=> lhs.queue;
+
+			read_lock_type lock_lhs(lhs.mutex, std::defer_lock);
+			read_lock_type lock_rhs(rhs.mutex, std::defer_lock);
+			std::scoped_lock lock(lock_lhs, lock_rhs);
+
+			return lhs.queue <=> rhs.queue;
+		}
+
 	/// @}
 
 	//----------------------------
@@ -581,7 +609,7 @@ public:
 	/// @param lhs container to swap with rhs
 	/// @param rhs container to swap with lhs
 	template<class Ty, template<class, class> class Q, class A>
-	friend void swap(concurrent_queue<Ty, Q, A>& lhs, concurrent_queue<Ty, Q, A>& rhs) noexcept(noexcept(lhs.queue.swap(rhs.queue)));
+	friend void swap(concurrent_queue<Ty, Q, A>& lhs, concurrent_queue<Ty, Q, A>& rhs);
 
 	/// @}
 
@@ -610,7 +638,8 @@ private:
 	/// @brief Move Constructor Implementation
 	/// @details by taking the lock as a parameter, it allows the queue to be move-constructed, rather than move-assigned
 	/// @param[in] other container to move
-	concurrent_queue(concurrent_queue&& other, write_lock_type) noexcept
+	concurrent_queue(concurrent_queue&& other, write_lock_type) noexcept(
+	    std::is_nothrow_constructible_v<queue_type, queue_type&&>)
 	    : queue(std::move(other.queue))
 	{
 	}
@@ -619,7 +648,8 @@ private:
 	/// @details by taking the lock as a parameter, it allows the queue to be move-constructed, rather than move-assigned
 	/// @param[in] other container to move
 	/// @param[in] alloc memory allocator
-	concurrent_queue(concurrent_queue&& other, const allocator_type& alloc, write_lock_type) noexcept
+	concurrent_queue(concurrent_queue&& other, const allocator_type& alloc, write_lock_type) noexcept(
+	    std::is_nothrow_constructible_v<queue_type, queue_type&&, const allocator_type&>)
 	    : queue(std::move(other.queue), alloc)
 	{
 	}
@@ -661,7 +691,7 @@ bool operator!=(const concurrent_queue<T, Queue, Alloc>& lhs, const concurrent_q
 
 /// @brief Swap Operator
 template<class T, template<class, class> class Queue = std::deque, class Alloc = std::allocator<T>>
-void swap(concurrent_queue<T, Queue, Alloc>& lhs, concurrent_queue<T, Queue, Alloc>& rhs) noexcept(noexcept(lhs.queue.swap(rhs.queue)))
+void swap(concurrent_queue<T, Queue, Alloc>& lhs, concurrent_queue<T, Queue, Alloc>& rhs)
 {
 	if (&lhs != &rhs)
 	{

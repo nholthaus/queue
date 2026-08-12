@@ -1,3 +1,4 @@
+#pragma once
 #include <concurrent_queue.h>
 
 #include <algorithm>
@@ -7,6 +8,7 @@
 #include <memory>
 #include <memory_resource>
 #include <numeric>
+#include <stdexcept>
 #include <thread>
 
 using namespace std::chrono;
@@ -15,6 +17,90 @@ using namespace std::string_literals;
 
 namespace
 {
+	template<class T>
+	class stateful_test_allocator
+	{
+	public:
+		using value_type = T;
+
+		explicit stateful_test_allocator(int identity = 0) noexcept
+		    : identity(identity)
+		{
+		}
+
+		template<class U>
+		stateful_test_allocator(const stateful_test_allocator<U>& other) noexcept
+		    : identity(other.identity)
+		{
+		}
+
+		[[nodiscard]] T* allocate(std::size_t n)
+		{
+			return std::allocator<T>{}.allocate(n);
+		}
+
+		void deallocate(T* ptr, std::size_t n) noexcept
+		{
+			std::allocator<T>{}.deallocate(ptr, n);
+		}
+
+		template<class U>
+		friend class stateful_test_allocator;
+
+		friend bool operator==(const stateful_test_allocator&, const stateful_test_allocator&) = default;
+
+		int identity;
+	};
+
+	template<class T, class Alloc>
+	class throwing_move_queue : public std::deque<T, Alloc>
+	{
+		using base_type = std::deque<T, Alloc>;
+
+	public:
+		using base_type::base_type;
+		throwing_move_queue()                                      = default;
+		throwing_move_queue(const throwing_move_queue&)            = default;
+		throwing_move_queue& operator=(const throwing_move_queue&) = default;
+
+		throwing_move_queue(throwing_move_queue&& other) noexcept(false)
+		    : base_type(move_or_throw(other))
+		{
+		}
+
+		throwing_move_queue(throwing_move_queue&& other, const Alloc& alloc) noexcept(false)
+		    : base_type(move_or_throw(other), alloc)
+		{
+		}
+
+		throwing_move_queue& operator=(throwing_move_queue&& other) noexcept(false)
+		{
+			throw_if_requested();
+			base_type::operator=(std::move(other));
+			return *this;
+		}
+
+		void swap(throwing_move_queue& other) noexcept(false)
+		{
+			throw_if_requested();
+			base_type::swap(other);
+		}
+
+		inline static bool throw_on_move = false;
+
+	private:
+		static throwing_move_queue&& move_or_throw(throwing_move_queue& other)
+		{
+			throw_if_requested();
+			return std::move(other);
+		}
+
+		static void throw_if_requested()
+		{
+			if (throw_on_move)
+				throw std::runtime_error("requested queue operation failure");
+		}
+	};
 
 	// The fixture for testing class Cache
 	class concurrent_queue_test : public ::testing::Test
@@ -167,9 +253,9 @@ namespace
 
 		test_object::clearfunctioncalls();
 		{
-			test_object                   c('c');
-			concurrent_queue<test_object> a(3, c);
-			auto                          b(a);
+			test_object      c('c');
+			concurrent_queue a(3, c);
+			auto             b(a);
 
 			EXPECT_EQ(a, b);
 			EXPECT_EQ(b.size(), 3);
@@ -410,6 +496,45 @@ namespace
 	}
 
 	//------------------------------------------------------------------------------------------------------------------
+	TEST_F(concurrent_queue_test, move_and_swap_exception_contracts)
+	{
+		using underlying_type      = throwing_move_queue<int, std::allocator<int>>;
+		using queue_type           = concurrent_queue<int, throwing_move_queue>;
+		using allocator_type       = stateful_test_allocator<int>;
+		using allocated_queue_type = concurrent_queue<int, throwing_move_queue, allocator_type>;
+
+		static_assert(!std::is_nothrow_move_constructible_v<queue_type>);
+		static_assert(!std::is_nothrow_move_assignable_v<queue_type>);
+		static_assert(!noexcept(allocated_queue_type(std::declval<allocated_queue_type&&>(), allocator_type{})));
+		static_assert(!noexcept(swap(std::declval<queue_type&>(), std::declval<queue_type&>())));
+
+		queue_type source{1, 2, 3};
+		underlying_type::throw_on_move = true;
+		EXPECT_THROW((queue_type(std::move(source))), std::runtime_error);
+		underlying_type::throw_on_move = false;
+		EXPECT_EQ(source.size(), 3);
+
+		allocated_queue_type allocated_source({6, 7, 8}, allocator_type{1});
+		throwing_move_queue<int, allocator_type>::throw_on_move = true;
+		EXPECT_THROW((allocated_queue_type(std::move(allocated_source), allocator_type{2})), std::runtime_error);
+		throwing_move_queue<int, allocator_type>::throw_on_move = false;
+		EXPECT_EQ(allocated_source.size(), 3);
+
+		queue_type move_target{4, 5};
+		underlying_type::throw_on_move = true;
+		EXPECT_THROW(move_target = std::move(source), std::runtime_error);
+		underlying_type::throw_on_move = false;
+		EXPECT_EQ(source.size(), 3);
+		EXPECT_EQ(move_target.size(), 2);
+
+		underlying_type::throw_on_move = true;
+		EXPECT_THROW(swap(source, move_target), std::runtime_error);
+		underlying_type::throw_on_move = false;
+		EXPECT_EQ(source.size(), 3);
+		EXPECT_EQ(move_target.size(), 2);
+	}
+
+	//------------------------------------------------------------------------------------------------------------------
 	TEST_F(concurrent_queue_test, self_assignment)
 	{
 		concurrent_queue<int> queue{1, 2, 3};
@@ -440,8 +565,12 @@ namespace
 	{
 		concurrent_queue<int, std::list> lhs{1, 2, 3};
 		concurrent_queue<int, std::list> rhs{1, 2, 3};
+		concurrent_queue<int, std::list> greater{1, 2, 4};
 
 		EXPECT_EQ(lhs, rhs);
+		EXPECT_EQ(lhs <=> rhs, std::strong_ordering::equal);
+		EXPECT_LT(lhs, greater);
+		EXPECT_GT(greater, rhs);
 		swap(lhs, rhs);
 		EXPECT_EQ(lhs, rhs);
 	}
@@ -453,7 +582,7 @@ namespace
 		concurrent_queue<int>::read_lock_type lock;
 
 		{
-			concurrent_queue<int> a{1, 2};
+			const concurrent_queue a{1, 2};
 			lock = std::move(a.acquire_read_lock());
 		}
 
@@ -549,8 +678,7 @@ namespace
 				                              iteration.arrive_and_wait();
 				                              a.emplace(i);
 			                              }
-			                              return std::this_thread::get_id();
-		                              });
+			                              return std::this_thread::get_id(); });
 		auto odd_thread  = std::async(std::launch::async, [odds, &a, &iteration]
                                      {
                                          for (int i : odds)
@@ -558,8 +686,7 @@ namespace
 				                             iteration.arrive_and_wait();
 				                             a.emplace(i);
                                          }
-                                         return std::this_thread::get_id();
-                                     });
+                                         return std::this_thread::get_id(); });
 
 		auto odd_thread_id  = odd_thread.get();
 		auto even_thread_id = even_thread.get();
@@ -573,7 +700,7 @@ namespace
 		EXPECT_EQ(a.size(), 1000);
 
 		// if we then sort the elements, we should have all the numbers from 1 to 1000 with no duplicates.
-		std::sort(a.begin(), a.end());
+		std::ranges::sort(a);
 
 		int i = 0;
 		for (auto itr = a.cbegin(); itr != a.cend(); ++itr)
@@ -663,8 +790,7 @@ namespace
 				                              iteration.arrive_and_wait();
 				                              a.push(i);
 			                              }
-			                              return std::this_thread::get_id();
-		                              });
+			                              return std::this_thread::get_id(); });
 		auto odd_thread  = std::async(std::launch::async, [odds, &a, &iteration]
                                      {
                                          for (int i : odds)
@@ -672,8 +798,7 @@ namespace
 				                             iteration.arrive_and_wait();
 				                             a.push(i);
                                          }
-                                         return std::this_thread::get_id();
-                                     });
+                                         return std::this_thread::get_id(); });
 
 		auto odd_thread_id  = odd_thread.get();
 		auto even_thread_id = even_thread.get();
@@ -687,7 +812,7 @@ namespace
 		EXPECT_EQ(a.size(), 1000);
 
 		// if we then sort the elements, we should have all the numbers from 1 to 1000 with no duplicates.
-		std::sort(a.begin(), a.end());
+		std::ranges::sort(a);
 
 		int i = 0;
 		for (auto itr = a.cbegin(); itr != a.cend(); ++itr)
@@ -752,8 +877,8 @@ namespace
 
 		concurrent_queue<int> a(numbers.begin(), numbers.end());
 
-		int count1 = 0;
-		int count2 = 0;
+		int          count1 = 0;
+		int          count2 = 0;
 		std::barrier iteration{2};
 
 		// Each consumer wins one contested pop per round. This proves sustained overlap without scheduler sleeps.
@@ -768,8 +893,7 @@ namespace
 				                          ++count1;
 				                          iteration.arrive_and_wait();
 			                          }
-			                          return std::this_thread::get_id();
-		                          });
+			                          return std::this_thread::get_id(); });
 		auto thread2 = std::async(std::launch::async, [&a, &count2, &iteration]
 		                          {
 			                          int val;
@@ -781,8 +905,7 @@ namespace
 				                          ++count2;
 				                          iteration.arrive_and_wait();
 			                          }
-			                          return std::this_thread::get_id();
-		                          });
+			                          return std::this_thread::get_id(); });
 
 		auto thread1_id = thread1.get();
 		auto thread2_id = thread2.get();
@@ -859,8 +982,7 @@ namespace
 				                          if (a.try_pop(val))
 					                          ++count1;
 			                          }
-			                          return std::this_thread::get_id();
-		                          });
+			                          return std::this_thread::get_id(); });
 		auto thread2 = std::async(std::launch::async, [&a, &count2]
 		                          {
 			                          int val;
@@ -869,8 +991,7 @@ namespace
 				                          if (a.try_pop(val))
 					                          ++count2;
 			                          }
-			                          return std::this_thread::get_id();
-		                          });
+			                          return std::this_thread::get_id(); });
 
 		auto thread1_id = thread1.get();
 		auto thread2_id = thread2.get();
@@ -909,10 +1030,10 @@ namespace
 	TEST_F(concurrent_queue_test, try_pop_for_empty)
 	{
 		// should not deadlock, `a` should be in its original state
-		concurrent_queue<int> a;
-		concurrent_queue<int> b;
-		const microseconds    timeout = 100ms;
-		int                   result  = 0;
+		concurrent_queue<int>  a;
+		concurrent_queue<int>  b;
+		constexpr microseconds timeout = 100ms;
+		int                    result  = 0;
 
 		EXPECT_EQ(a, b);
 		EXPECT_EQ(result, 0);
@@ -957,8 +1078,7 @@ namespace
 				                          if (a.try_pop_for(val, 1ms))
 					                          ++count1;
 			                          }
-			                          return std::this_thread::get_id();
-		                          });
+			                          return std::this_thread::get_id(); });
 		auto thread2 = std::async(std::launch::async, [&a, &count2]
 		                          {
 			                          int val;
@@ -967,8 +1087,7 @@ namespace
 				                          if (a.try_pop_for(val, 1ms))
 					                          ++count2;
 			                          }
-			                          return std::this_thread::get_id();
-		                          });
+			                          return std::this_thread::get_id(); });
 
 		auto thread1_id = thread1.get();
 		auto thread2_id = thread2.get();
@@ -1101,12 +1220,12 @@ namespace
 	//------------------------------------------------------------------------------------------------------------------
 	TEST_F(concurrent_queue_test, equality)
 	{
-		concurrent_queue a{1,2,3};
-		concurrent_queue b{1,2,3};
-		concurrent_queue c{4,5,6};
+		concurrent_queue a{1, 2, 3};
+		concurrent_queue b{1, 2, 3};
+		concurrent_queue c{4, 5, 6};
 
-		EXPECT_EQ(a,b);
-		EXPECT_NE(a,c);
+		EXPECT_EQ(a, b);
+		EXPECT_NE(a, c);
 		EXPECT_EQ(a, a);
 		EXPECT_NE(a, (concurrent_queue<int>{1, 2}));
 	}
@@ -1140,8 +1259,7 @@ namespace
 				                           queue.push(i);
 				                           iteration.arrive_and_wait();
 			                           }
-			                           return std::this_thread::get_id();
-		                           });
+			                           return std::this_thread::get_id(); });
 		auto consumer = std::async(std::launch::async, [&queue, &numbers_out, test_size, &iteration]
 		                           {
 			                           int val;
@@ -1152,8 +1270,7 @@ namespace
 				                           numbers_out.push_back(val);
 				                           iteration.arrive_and_wait();
 			                           }
-			                           return std::this_thread::get_id();
-		                           });
+			                           return std::this_thread::get_id(); });
 
 		auto producer_id = producer.get();
 		auto consumer_id = consumer.get();
@@ -1167,7 +1284,7 @@ namespace
 		EXPECT_EQ(numbers_out.front(), 0);
 		EXPECT_EQ(numbers_out.back(), test_size - 1);
 		EXPECT_EQ(numbers_out.size(), test_size);
-		EXPECT_TRUE(std::is_sorted(numbers_out.cbegin(), numbers_out.cend()));    // given the first, last, and size are correct, this tells us all the rest of the values are also correct
+		EXPECT_TRUE(std::ranges::is_sorted(numbers_out));    // given the first, last, and size are correct, this tells us all the rest of the values are also correct
 	}
 
 	//------------------------------------------------------------------------------------------------------------------
@@ -1205,8 +1322,7 @@ namespace
 				                            odds.pop_front();
 				                            iteration.arrive_and_wait();
 			                            }
-			                            return std::this_thread::get_id();
-		                            });
+			                            return std::this_thread::get_id(); });
 		auto producer2 = std::async(std::launch::async, [&queue, &evens, &iteration]
 		                            {
 			                            for (int i = 0; i < 100; ++i)
@@ -1216,8 +1332,7 @@ namespace
 				                            evens.pop_front();
 				                            iteration.arrive_and_wait();
 			                            }
-			                            return std::this_thread::get_id();
-		                            });
+			                            return std::this_thread::get_id(); });
 		auto consumer1 = std::async(std::launch::async, [&queue, &out1, &iteration]
 		                            {
 			                            int val;
@@ -1228,8 +1343,7 @@ namespace
 				                            out1.push_back(val);
 				                            iteration.arrive_and_wait();
 			                            }
-			                            return std::this_thread::get_id();
-		                            });
+			                            return std::this_thread::get_id(); });
 		auto consumer2 = std::async(std::launch::async, [&queue, &out2, &iteration]
 		                            {
 			                            int val;
@@ -1240,13 +1354,12 @@ namespace
 				                            out2.push_back(val);
 				                            iteration.arrive_and_wait();
 			                            }
-			                            return std::this_thread::get_id();
-		                            });
+			                            return std::this_thread::get_id(); });
 
-		auto producer1_id = producer1.get();
-		auto producer2_id = producer2.get();
-		auto consumer1_id = consumer1.get();
-		auto consumer2_id = consumer2.get();
+		EXPECT_NE(producer1.get(),std::thread::id{});
+		EXPECT_NE(producer2.get(),std::thread::id{});
+		EXPECT_NE(consumer1.get(),std::thread::id{});
+		EXPECT_NE(consumer2.get(),std::thread::id{});
 
 		// check that all the numbers from in are now in out
 		EXPECT_EQ(odds.size(), 0);
@@ -1258,14 +1371,14 @@ namespace
 		std::deque<int> full_output;
 
 		// merge needs sorted input, produces sorted output
-		std::sort(out1.begin(), out1.end());
-		std::sort(out2.begin(), out2.end());
-		std::merge(out1.cbegin(), out1.cend(), out2.cbegin(), out2.cend(), std::back_inserter(full_output));
+		std::ranges::sort(out1);
+		std::ranges::sort(out2);
+		std::ranges::merge(std::as_const(out1), std::as_const(out2), std::back_inserter(full_output));
 
 		EXPECT_EQ(full_output.size(), 200);
 
 		int i = 0;
-		for(int value : full_output)
+		for (int value : full_output)
 			EXPECT_EQ(value, ++i);
 	}
 }    // namespace
