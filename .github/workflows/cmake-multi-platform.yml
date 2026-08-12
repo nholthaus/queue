@@ -57,7 +57,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install gcovr
-        run: python -m pip install gcovr==8.3
+        run: python -m pip install gcovr==8.4
 
       - name: Configure coverage build
         run: >
